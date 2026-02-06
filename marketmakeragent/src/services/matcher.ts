@@ -43,12 +43,16 @@ export class AgentMatcher {
 
 		scoredAgents.sort((a, b) => b.score - a.score);
 
-		return scoredAgents.slice(0, 5).map((scored) => ({
-			agent: scored.agent,
-			score: scored.score,
-			trustScore: scored.trustScore,
-			reason: this.generateMatchReason(scored.semanticScore, scored.trustScore),
-		}));
+		return scoredAgents.slice(0, 5).map((scored) => {
+			// Remove embedding from agent card for cleaner API response
+			const { embedding, ...agentWithoutEmbedding } = scored.agent;
+			return {
+				agent: agentWithoutEmbedding,
+				score: scored.score,
+				trustScore: scored.trustScore,
+				reason: this.generateMatchReason(scored.semanticScore, scored.trustScore),
+			};
+		});
 	}
 
 	private agentToText(agent: AgentCapabilityCard): string {
