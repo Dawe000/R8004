@@ -1,0 +1,25 @@
+{
+  "name": "erc8001-agent-task-contracts",
+  "version": "0.1.0",
+  "description": "ERC8001 Agent Task System smart contracts",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:verbose": "VERBOSE=1 hardhat test",
+    "deploy:sandbox": "hardhat run script/deploy-sandbox.ts"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@uma/contracts-node": "^0.4.0",
+    "@uma/core": "^2.61.0",
+    "@types/node": "^20.0.0",
+    "hardhat": "^2.19.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "ethers": "^6.9.0"
+  }
+}
