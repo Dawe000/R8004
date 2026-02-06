@@ -92,7 +92,7 @@ export default {
 					matchStrategy: 'semantic-embedding-cosine-similarity',
 				};
 
-				return new Response(JSON.stringify(response), {
+				return new Response(JSON.stringify(response, null, 2), {
 					status: 200,
 					headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 				});
