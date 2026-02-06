@@ -1,0 +1,12 @@
+name = "trust-api-mock"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+account_id = "a279e1e82b5f3fb2904191364cb0e3f7"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trust-api-db"
+database_id = "491728e0-67ef-425e-b9d1-902c9ed92df6"
+
+[vars]
+ENVIRONMENT = "development"

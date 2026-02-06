@@ -1,0 +1,17 @@
+{
+	"name": "trust-api-mock",
+	"version": "1.0.0",
+	"description": "Mock trust/reputation API for development and testing",
+	"main": "src/index.js",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy --minify",
+		"db:create": "wrangler d1 create trust-api-db",
+		"db:migrate:local": "wrangler d1 migrations apply trust-api-db --local",
+		"db:migrate:remote": "wrangler d1 migrations apply trust-api-db --remote"
+	},
+	"keywords": ["trust", "reputation", "cloudflare-workers", "d1"],
+	"devDependencies": {
+		"wrangler": "^4.63.0"
+	}
+}
