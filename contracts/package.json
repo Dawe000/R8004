@@ -9,6 +9,7 @@
     "deploy:sandbox": "hardhat run script/deploy-sandbox.ts"
   },
   "devDependencies": {
+    "@erc8001/agent-task-sdk": "file:../sdk",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@uma/contracts-node": "^0.4.0",
