@@ -205,7 +205,9 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         if (paymentDeposited[taskId]) {
             IERC20(t.paymentToken).safeTransfer(t.client, t.paymentAmount);
         }
-        // Agent stake is slashed (remains in contract)
+        if (t.agentStake > 0) {
+            IERC20(t.paymentToken).safeTransfer(t.client, t.agentStake);
+        }
         emit TaskTimeoutCancelled(taskId);
     }
 

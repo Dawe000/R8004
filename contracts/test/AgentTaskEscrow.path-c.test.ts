@@ -30,6 +30,6 @@ describe("AgentTaskEscrow - Path C (Timeout Cancellation)", function () {
     await escrow.connect(client).timeoutCancellation(0, "deadline exceeded");
     const clientBalanceAfter = await mockToken.balanceOf(await client.getAddress());
 
-    expect(clientBalanceAfter - clientBalanceBefore).to.equal(paymentAmount);
+    expect(clientBalanceAfter - clientBalanceBefore).to.equal(paymentAmount + stakeAmount);
   });
 });
