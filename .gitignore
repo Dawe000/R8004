@@ -35,5 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# wrangler/cloudflare workers
+.dev.vars
 
 /claude.md*
