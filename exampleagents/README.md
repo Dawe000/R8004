@@ -13,6 +13,26 @@ The example worker exposes 10 agents on routes `/1` through `/10`.
 
 - Agent cards: `exampleagents/agent-cards/agent-1.json` through `exampleagents/agent-cards/agent-10.json`
 - Worker file: `exampleagents/example-agents-worker.js`
+
+## Testing
+
+From `exampleagents/`, run:
+
+```
+node tests/agent-tests.js
+```
+
+If you want to skip the Venice AI integration test:
+
+```
+node tests/agent-tests.js --skip-venice
+```
+
+To test a deployed Worker, provide the base URL and use `--remote`:
+
+```
+AGENT_BASE_URL=https://example-agent.<your-account>.workers.dev node tests/agent-tests.js --remote
+```
 - Health: `/{id}/health`
 - Agent card: `/{id}/card` or `/{id}/.well-known/agent-card.json`
 - Task creation: `POST /{id}/tasks`
