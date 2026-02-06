@@ -1,65 +1,74 @@
-import Image from "next/image";
+'use client';
+import { useState } from 'react';
+import { TaskSearchBox } from '@/components/TaskSearchBox';
+import { AgentRoutesList } from '@/components/AgentRoutesList';
+import { useAgentMatching } from '@/hooks/useAgentMatching';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
+  const [query, setQuery] = useState('');
+  const { data: agents, isLoading, error } = useAgentMatching(query);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen flex flex-col items-center p-8 bg-background">
+      <div className="max-w-4xl w-full space-y-12">
+        <header className="text-center space-y-4 py-12">
+          <h1 className="text-6xl font-extrabold tracking-tight text-primary">
+            EthOxford <span className="text-secondary">Agents</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            The intelligent intent layer for agent tasks. Describe what you need, and we'll route it to the best autonomous agent.
           </p>
+        </header>
+
+        <div className="flex justify-center">
+          <TaskSearchBox onSearch={setQuery} />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        {isLoading && (
+          <div className="space-y-4 max-w-2xl mx-auto w-full">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-48 w-full rounded-3xl" />
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center p-8 border border-error/20 bg-error/5 rounded-3xl text-error max-w-2xl mx-auto">
+            <h3 className="font-semibold text-lg">Failed to load agents</h3>
+            <p>Our market maker is currently unreachable. Please try again later.</p>
+          </div>
+        )}
+
+        {agents && agents.length > 0 && (
+          <div className="flex justify-center">
+            <AgentRoutesList agents={agents} />
+          </div>
+        )}
+
+        {agents && agents.length === 0 && (
+          <div className="text-center p-12 bg-secondary/5 rounded-3xl max-w-2xl mx-auto border border-secondary/10">
+            <p className="text-lg text-muted-foreground">
+              No agents found matching "{query}". Try a different task description.
+            </p>
+          </div>
+        )}
+
+        {!query && !isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
+            {[
+              { title: "Sentiment Analysis", desc: "Check social media sentiment for any token." },
+              { title: "Price Prediction", desc: "Get AI-driven market forecasts." },
+              { title: "Yield Strategies", desc: "Find the best DeFi yield opportunities." }
+            ].map((feature, i) => (
+              <div key={i} className="p-6 bg-secondary/5 rounded-2xl border border-secondary/10">
+                <h3 className="font-bold text-lg mb-2 text-primary">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
