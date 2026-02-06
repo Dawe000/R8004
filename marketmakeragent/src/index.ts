@@ -2,6 +2,7 @@ import { TaskMatchRequest, TaskMatchResponse } from './types';
 import { VeniceService } from './services/venice';
 import { AgentRegistry } from './services/agentRegistry';
 import { AgentMatcher } from './services/matcher';
+import { handleAgentMcpRoutes } from './api/agentMcpEndpoints';
 
 export interface Env {
 	VENICE_API_KEY: string;
@@ -57,21 +58,24 @@ export default {
 				}
 
 				const veniceService = new VeniceService(env.VENICE_API_KEY);
-				const agentRegistry = new AgentRegistry();
 
-				if (env.AGENTS_WORKER_URL) {
-					try {
-						const { AgentRegistryFetcher } = await import('./services/agentRegistryFetcher');
-						const fetcher = new AgentRegistryFetcher(env.AGENTS_WORKER_URL);
-						const fetchedAgents = await fetcher.fetchAllAgents();
-						if (fetchedAgents.length > 0) {
-							agentRegistry.setAgents(fetchedAgents);
+				// Fetch agents from worker
+				const agentBaseUrl = env.AGENTS_WORKER_URL || 'https://example-agent.lynethlabs.workers.dev';
+				const { AgentRegistryFetcher } = await import('./services/agentRegistryFetcher');
+				const fetcher = new AgentRegistryFetcher(agentBaseUrl);
+				const fetchedAgents = await fetcher.fetchAllAgents();
+
+				if (fetchedAgents.length === 0) {
+					return new Response(
+						JSON.stringify({ error: 'No agents available in registry' }),
+						{
+							status: 503,
+							headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 						}
-					} catch (error) {
-						console.error('Failed to fetch agents from worker, using mock registry:', error);
-					}
+					);
 				}
 
+				const agentRegistry = new AgentRegistry(fetchedAgents);
 				const matcher = new AgentMatcher(veniceService, agentRegistry);
 
 				const rankedAgents = await matcher.matchAgents(body);
@@ -96,6 +100,13 @@ export default {
 					}
 				);
 			}
+		}
+
+		// Try MCP agent routes
+		const agentBaseUrl = env.AGENTS_WORKER_URL || 'https://example-agent.lynethlabs.workers.dev';
+		const mcpResponse = await handleAgentMcpRoutes(request, url.pathname, agentBaseUrl);
+		if (mcpResponse) {
+			return mcpResponse;
 		}
 
 		return new Response('Not Found', { status: 404, headers: corsHeaders });
