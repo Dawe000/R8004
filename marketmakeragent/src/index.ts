@@ -2,12 +2,14 @@ import { TaskMatchRequest, TaskMatchResponse } from './types';
 import { VeniceService } from './services/venice';
 import { AgentRegistry } from './services/agentRegistry';
 import { AgentMatcher } from './services/matcher';
+import { TrustService } from './services/trust';
 import { handleAgentMcpRoutes } from './api/agentMcpEndpoints';
 
 export interface Env {
 	VENICE_API_KEY: string;
 	ENVIRONMENT: string;
 	AGENTS_WORKER_URL?: string;
+	TRUST_API_URL?: string;
 }
 
 const corsHeaders = {
@@ -76,7 +78,11 @@ export default {
 				}
 
 				const agentRegistry = new AgentRegistry(fetchedAgents);
-				const matcher = new AgentMatcher(veniceService, agentRegistry);
+
+				// Initialize trust service if URL is provided
+				const trustService = env.TRUST_API_URL ? new TrustService(env.TRUST_API_URL) : undefined;
+
+				const matcher = new AgentMatcher(veniceService, agentRegistry, trustService);
 
 				const rankedAgents = await matcher.matchAgents(body);
 

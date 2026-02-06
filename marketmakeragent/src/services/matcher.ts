@@ -1,16 +1,24 @@
 import { AgentCapabilityCard, RankedAgent, TaskMatchRequest } from '../types';
 import { VeniceService, cosineSimilarity } from './venice';
 import { AgentRegistry } from './agentRegistry';
+import { TrustService } from './trust';
 
 export class AgentMatcher {
 	constructor(
 		private veniceService: VeniceService,
-		private agentRegistry: AgentRegistry
+		private agentRegistry: AgentRegistry,
+		private trustService?: TrustService
 	) {}
 
 	async matchAgents(request: TaskMatchRequest): Promise<RankedAgent[]> {
 		const queryEmbedding = await this.veniceService.generateEmbedding(request.query);
 		const agents = this.agentRegistry.getAll();
+
+		// Fetch all trust scores upfront if trust service is available
+		let trustScores: Map<string, number> | undefined;
+		if (this.trustService) {
+			trustScores = await this.trustService.getAllTrustScores();
+		}
 
 		const scoredAgents = await Promise.all(
 			agents.map(async (agent) => {
@@ -21,8 +29,8 @@ export class AgentMatcher {
 				}
 
 				const semanticScore = cosineSimilarity(queryEmbedding, agent.embedding);
-				const trustScore = this.calculateTrustScore(agent);
-				const combinedScore = semanticScore * 0.5 + trustScore * 0.5;
+				const trustScore = await this.getTrustScore(agent, trustScores);
+				const combinedScore = semanticScore * 0.7 + trustScore * 0.3;
 
 				return {
 					agent,
@@ -49,15 +57,18 @@ export class AgentMatcher {
 		return `${agent.name}. ${agent.description} Capabilities: ${domains || skillsText}`;
 	}
 
-	private calculateTrustScore(agent: AgentCapabilityCard): number {
-		if (!agent.sla) {
-			return 0.7;
+	private async getTrustScore(
+		agent: AgentCapabilityCard,
+		trustScores?: Map<string, number>
+	): Promise<number> {
+		// Use trust scores from Trust API database
+		if (trustScores && trustScores.has(agent.agentId)) {
+			const apiScore = trustScores.get(agent.agentId)!;
+			return apiScore / 100; // Normalize 0-100 to 0-1
 		}
-		const baseScore = 0.7;
-		const stakeFactor = Math.min(parseFloat(agent.sla.minAcceptanceStake) / 1e19, 0.2);
-		const speedFactor = Math.max(0, 0.1 - agent.sla.avgCompletionTimeSeconds / 36000);
 
-		return Math.min(baseScore + stakeFactor + speedFactor, 1.0);
+		// Default to 75/100 if no trust score available
+		return 0.75;
 	}
 
 	private generateMatchReason(semanticScore: number, trustScore: number): string {

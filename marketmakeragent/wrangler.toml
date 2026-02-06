@@ -5,3 +5,4 @@ compatibility_date = "2025-01-01"
 [vars]
 ENVIRONMENT = "development"
 AGENTS_WORKER_URL = "https://example-agent.lynethlabs.workers.dev"
+TRUST_API_URL = "http://localhost:8789"
