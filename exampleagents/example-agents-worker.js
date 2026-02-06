@@ -254,11 +254,31 @@ async function processAgentTask(agent, body, inputText, env) {
   const systemPrompt = skill.systemPrompt;
   const userPrompt = `${skill.userPrompt}\n\n${inputText}`;
 
-  const model = body?.task?.model || body?.model || env.VENICE_MODEL || 'llama-3.3-70b';
+  const model =
+    body?.task?.model ||
+    body?.model ||
+    agent.model ||
+    (agent.modelEnv ? env[agent.modelEnv] : undefined) ||
+    env.VENICE_MODEL ||
+    'zai-org-glm-4.7';
   const apiKey = env.VENICE_API_KEY;
 
   if (!apiKey) {
     throw new Error('Missing VENICE_API_KEY in environment');
+  }
+
+  const requestBody = {
+    model: model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 1600,
+    temperature: 0.2,
+  };
+
+  if (agent.veniceParameters) {
+    requestBody.venice_parameters = agent.veniceParameters;
   }
 
   const response = await fetch('https://api.venice.ai/api/v1/chat/completions', {
@@ -267,15 +287,7 @@ async function processAgentTask(agent, body, inputText, env) {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 1600,
-      temperature: 0.2,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -339,52 +351,70 @@ const AGENT_CARDS = {
 const AGENTS = {
   '1': {
     id: '1',
+    modelEnv: 'VENICE_MODEL_TWITTER',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
     skills: [
       {
-        id: 'security_analysis',
+        id: 'twitter_sentiment_snapshot',
         systemPrompt:
-          'You are a cybersecurity-focused code reviewer. Return JSON with keys: issues (array of {severity,type,description,location,fix}), summary, riskScore (1-10).',
-        userPrompt: 'Analyze the following code for security issues:',
+          'You are a Twitter/X sentiment analyst. Use web search and scraping to find the most recent public sentiment signals for the given topic, keyword, or ticker. Return JSON with keys: topic, sentiment {label, score}, highlights (array of strings), notablePosts (array of {summary, author, time}), asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Analyze current Twitter/X sentiment for:',
       },
       {
-        id: 'performance_review',
+        id: 'twitter_trend_summary',
         systemPrompt:
-          'You are a performance engineer. Return JSON with keys: bottlenecks (array of {description,impact,fix}), summary, perfScore (1-10).',
-        userPrompt: 'Analyze the following code for performance issues:',
+          'You summarize Twitter/X trends. Use web search and scraping to identify top themes, rising narratives, and sentiment drivers. Return JSON with keys: topic, themes (array of {theme, sentiment, evidence}), asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Summarize Twitter/X trends for:',
       },
     ],
   },
   '2': {
     id: '2',
+    modelEnv: 'VENICE_MODEL_POLYMARKET',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
     skills: [
       {
-        id: 'smart_contract_audit',
+        id: 'polymarket_price_lookup',
         systemPrompt:
-          'You are a senior smart contract auditor. Return JSON with keys: findings (array of {severity,issue,impact,fix}), summary, confidence.',
-        userPrompt: 'Audit this Solidity code for vulnerabilities:',
+          'You are a Polymarket price finder. Use web search and scraping to locate the current market odds/prices for the requested market. Return JSON with keys: market, outcomes (array of {name, price, impliedProbability}), volume, liquidity, asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Find the current Polymarket prices for:',
       },
       {
-        id: 'gas_optimization',
+        id: 'polymarket_market_summary',
         systemPrompt:
-          'You are a gas optimization specialist. Return JSON with keys: optimizations (array of {description,gasImpact,change}), summary.',
-        userPrompt: 'Review this Solidity code for gas optimizations:',
+          'You summarize Polymarket markets. Use web search and scraping to summarize market description, recent price movement, and key drivers. Return JSON with keys: market, summary, recentMoves (array), asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Summarize this Polymarket market:',
       },
     ],
   },
   '3': {
     id: '3',
+    modelEnv: 'VENICE_MODEL_STOCKS',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
     skills: [
       {
-        id: 'exploratory_analysis',
+        id: 'stock_price_lookup',
         systemPrompt:
-          'You are a data analyst. Return JSON with keys: highlights (array), anomalies (array), metrics (object), summary.',
-        userPrompt: 'Analyze this dataset or summary:',
+          'You are a stock price finder. Use web search and scraping to return the latest price and percent change for the requested ticker. Return JSON with keys: ticker, price, changePercent, currency, exchange, asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Find the latest stock price for:',
       },
       {
-        id: 'dashboard_outline',
+        id: 'company_snapshot',
         systemPrompt:
-          'You design dashboards. Return JSON with keys: charts (array of {title,type,metric}), layout, summary.',
-        userPrompt: 'Propose a dashboard based on this dataset or goals:',
+          'You provide a brief company snapshot using web search and scraping. Return JSON with keys: ticker, companyName, sector, marketCap, dayRange, week52Range, asOf (ISO timestamp), sources (array of {title, url}).',
+        userPrompt: 'Provide a company snapshot for:',
       },
     ],
   },

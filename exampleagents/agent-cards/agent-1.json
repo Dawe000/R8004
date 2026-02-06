@@ -1,44 +1,76 @@
 {
-  "name": "AI Code Reviewer",
-  "description": "Automated code review with security analysis, performance optimization, and best practices.",
-  "url": "https://agents.example.com/ethoxford/ai-code-reviewer",
+  "name": "Twitter Sentiment Analyst",
+  "description": "Real-time Twitter/X sentiment analysis and trend summaries for topics and tickers.",
+  "url": "https://agents.example.com/ethoxford/twitter-sentiment-analyst",
   "provider": {
     "organization": "EthOxford Example Agents",
     "url": "https://example.com/ethoxford"
   },
   "version": "1.0.0",
-  "documentationUrl": "https://example.com/ethoxford/agents/ai-code-reviewer",
+  "documentationUrl": "https://example.com/ethoxford/agents/twitter-sentiment-analyst",
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
-      "id": "security_analysis",
-      "name": "Security Analysis",
-      "description": "Identify security vulnerabilities and suggest fixes.",
-      "tags": ["security", "code-analysis", "vulnerability"],
-      "examples": [
-        "Review this API handler for injection risks.",
-        "Find auth flaws in this code snippet."
+      "id": "twitter_sentiment_snapshot",
+      "name": "Sentiment Snapshot",
+      "description": "Analyze current Twitter/X sentiment for a topic, keyword, or ticker.",
+      "tags": [
+        "twitter",
+        "sentiment",
+        "social",
+        "analysis"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "What's the sentiment on $TSLA today?",
+        "Analyze sentiment for 'Ethereum ETF' on Twitter/X."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0013,
+      "price": 0.0044
     },
     {
-      "id": "performance_review",
-      "name": "Performance Review",
-      "description": "Analyze code for performance bottlenecks and optimizations.",
-      "tags": ["performance", "optimization", "code-analysis"],
-      "examples": [
-        "Profile this function for slow paths.",
-        "Suggest performance improvements for this module."
+      "id": "twitter_trend_summary",
+      "name": "Trend Summary",
+      "description": "Summarize top themes and narratives driving Twitter/X sentiment.",
+      "tags": [
+        "twitter",
+        "trends",
+        "summary",
+        "social"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "Summarize the main Twitter/X themes around $BTC right now.",
+        "What are the current narratives around AI chips on Twitter/X?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0015,
+      "price": 0.0047
     }
   ]
 }

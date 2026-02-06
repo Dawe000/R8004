@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "prd_draft",
       "name": "PRD Draft",
       "description": "Draft product requirements with scope, goals, and success metrics.",
-      "tags": ["product", "requirements", "planning"],
+      "tags": [
+        "product",
+        "requirements",
+        "planning"
+      ],
       "examples": [
         "Write a PRD for a new onboarding flow.",
         "Draft requirements for a mobile checkout redesign."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0025,
+      "price": 0.006
     },
     {
       "id": "user_story_generation",
       "name": "User Stories",
       "description": "Generate user stories with acceptance criteria.",
-      "tags": ["product", "user-stories", "backlog"],
+      "tags": [
+        "product",
+        "user-stories",
+        "backlog"
+      ],
       "examples": [
         "Create user stories for a subscription upgrade flow.",
         "Generate acceptance criteria for these features."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0027,
+      "price": 0.0063
     }
   ]
 }

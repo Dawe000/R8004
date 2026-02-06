@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "landing_page_copy",
       "name": "Landing Page Copy",
       "description": "Write hero sections, benefit bullets, and CTAs.",
-      "tags": ["marketing", "copywriting", "landing-page"],
+      "tags": [
+        "marketing",
+        "copywriting",
+        "landing-page"
+      ],
       "examples": [
         "Write landing page copy for a new fintech app.",
         "Draft hero and CTA copy for a product launch."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0028,
+      "price": 0.0064
     },
     {
       "id": "ad_variations",
       "name": "Ad Variations",
       "description": "Generate short ad copy variants for testing.",
-      "tags": ["marketing", "ads", "experiments"],
+      "tags": [
+        "marketing",
+        "ads",
+        "experiments"
+      ],
       "examples": [
         "Create 5 ad variants for a newsletter signup campaign.",
         "Generate paid social copy options for this offer."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.003,
+      "price": 0.0067
     }
   ]
 }

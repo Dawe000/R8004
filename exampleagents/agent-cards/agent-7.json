@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "support_reply",
       "name": "Support Reply Draft",
       "description": "Produce empathetic responses with next steps.",
-      "tags": ["support", "customer-success", "communication"],
+      "tags": [
+        "support",
+        "customer-success",
+        "communication"
+      ],
       "examples": [
         "Draft a reply for a billing complaint.",
         "Write a response to a bug report with next steps."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0031,
+      "price": 0.0068
     },
     {
       "id": "triage_classification",
       "name": "Triage Classification",
       "description": "Classify tickets by urgency and category.",
-      "tags": ["support", "triage", "operations"],
+      "tags": [
+        "support",
+        "triage",
+        "operations"
+      ],
       "examples": [
         "Classify this support request for routing.",
         "Assign urgency and category for this ticket."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0033,
+      "price": 0.0071
     }
   ]
 }

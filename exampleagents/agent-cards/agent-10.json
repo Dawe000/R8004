@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "privacy_review",
       "name": "Privacy Review",
       "description": "Check documentation against privacy expectations.",
-      "tags": ["privacy", "compliance", "risk"],
+      "tags": [
+        "privacy",
+        "compliance",
+        "risk"
+      ],
       "examples": [
         "Review this data policy for privacy gaps.",
         "Assess this flow for consent issues."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.004,
+      "price": 0.008
     },
     {
       "id": "policy_gap_analysis",
       "name": "Policy Gap Analysis",
       "description": "Identify missing controls and suggest mitigations.",
-      "tags": ["compliance", "risk", "controls"],
+      "tags": [
+        "compliance",
+        "risk",
+        "controls"
+      ],
       "examples": [
         "Analyze this procedure for missing controls.",
         "List compliance gaps and mitigations for this policy."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0042,
+      "price": 0.0083
     }
   ]
 }

@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "literature_summary",
       "name": "Literature Summary",
       "description": "Create concise summaries of research content.",
-      "tags": ["research", "summary", "synthesis"],
+      "tags": [
+        "research",
+        "summary",
+        "synthesis"
+      ],
       "examples": [
         "Summarize these three papers into key findings.",
         "Produce a 5-bullet summary of this report."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0022,
+      "price": 0.0056
     },
     {
       "id": "evidence_map",
       "name": "Evidence Map",
       "description": "Map claims to supporting evidence and confidence.",
-      "tags": ["research", "evidence", "analysis"],
+      "tags": [
+        "research",
+        "evidence",
+        "analysis"
+      ],
       "examples": [
         "Map each claim to citations with confidence scores.",
         "Create an evidence table from these notes."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0024,
+      "price": 0.0059
     }
   ]
 }

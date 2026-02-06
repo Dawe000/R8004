@@ -39,6 +39,7 @@ next-env.d.ts
 .dev.vars
 .wrangler
 cf.json
+wrangler-account.json
 
 /claude.md*
 /context-docs/

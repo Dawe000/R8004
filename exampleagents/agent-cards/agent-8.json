@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "heuristic_review",
       "name": "Heuristic Review",
       "description": "Evaluate UI against usability heuristics.",
-      "tags": ["ux", "heuristics", "design"],
+      "tags": [
+        "ux",
+        "heuristics",
+        "design"
+      ],
       "examples": [
         "Review this checkout flow for heuristic issues.",
         "Evaluate this onboarding UI for usability problems."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0034,
+      "price": 0.0072
     },
     {
       "id": "usability_risks",
       "name": "Usability Risks",
       "description": "Identify friction points and drop-off risks.",
-      "tags": ["ux", "usability", "product"],
+      "tags": [
+        "ux",
+        "usability",
+        "product"
+      ],
       "examples": [
         "Identify top usability risks in this flow.",
         "List friction points for this UX journey."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0036,
+      "price": 0.0075
     }
   ]
 }

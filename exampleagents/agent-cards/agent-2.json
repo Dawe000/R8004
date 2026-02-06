@@ -1,44 +1,75 @@
 {
-  "name": "Solidity Auditor",
-  "description": "Smart contract security review focused on Solidity and EVM risks.",
-  "url": "https://agents.example.com/ethoxford/solidity-auditor",
+  "name": "Polymarket Price Finder",
+  "description": "Find current Polymarket odds, prices, and market summaries.",
+  "url": "https://agents.example.com/ethoxford/polymarket-price-finder",
   "provider": {
     "organization": "EthOxford Example Agents",
     "url": "https://example.com/ethoxford"
   },
   "version": "1.0.0",
-  "documentationUrl": "https://example.com/ethoxford/agents/solidity-auditor",
+  "documentationUrl": "https://example.com/ethoxford/agents/polymarket-price-finder",
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
-      "id": "smart_contract_audit",
-      "name": "Smart Contract Audit",
-      "description": "Detect common Solidity vulnerabilities and logic flaws.",
-      "tags": ["solidity", "security", "smart-contracts"],
-      "examples": [
-        "Audit this ERC20 contract for reentrancy or access control bugs.",
-        "Review this staking contract for logic errors."
+      "id": "polymarket_price_lookup",
+      "name": "Market Price Lookup",
+      "description": "Find current Polymarket odds/prices for a given market.",
+      "tags": [
+        "polymarket",
+        "prediction-market",
+        "pricing",
+        "odds"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "Find current prices for 'Will ETH be above $4,000 on Dec 31?'.",
+        "What's the Polymarket price for 'US recession in 2026'?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0016,
+      "price": 0.0048
     },
     {
-      "id": "gas_optimization",
-      "name": "Gas Optimization",
-      "description": "Suggest gas savings and efficiency improvements.",
-      "tags": ["solidity", "gas", "optimization"],
-      "examples": [
-        "Find gas-saving refactors in this contract.",
-        "Reduce storage writes for this function."
+      "id": "polymarket_market_summary",
+      "name": "Market Summary",
+      "description": "Summarize market description, volume, liquidity, and recent moves.",
+      "tags": [
+        "polymarket",
+        "market-data",
+        "summary"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "Summarize the market for 'Trump wins 2028'.",
+        "Give a quick summary of the Polymarket 'Fed cuts in March' market."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0018,
+      "price": 0.0051
     }
   ]
 }

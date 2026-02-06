@@ -1,44 +1,76 @@
 {
-  "name": "Data Insight Analyst",
-  "description": "Exploratory data analysis and insight generation from datasets.",
-  "url": "https://agents.example.com/ethoxford/data-insight-analyst",
+  "name": "Stock Price Finder",
+  "description": "Retrieve latest stock prices and company snapshots in real time.",
+  "url": "https://agents.example.com/ethoxford/stock-price-finder",
   "provider": {
     "organization": "EthOxford Example Agents",
     "url": "https://example.com/ethoxford"
   },
   "version": "1.0.0",
-  "documentationUrl": "https://example.com/ethoxford/agents/data-insight-analyst",
+  "documentationUrl": "https://example.com/ethoxford/agents/stock-price-finder",
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
-      "id": "exploratory_analysis",
-      "name": "Exploratory Analysis",
-      "description": "Summarize key trends, outliers, and descriptive stats.",
-      "tags": ["data", "analysis", "statistics"],
-      "examples": [
-        "Summarize the key trends in this dataset.",
-        "Highlight anomalies and metrics for this CSV."
+      "id": "stock_price_lookup",
+      "name": "Stock Price Lookup",
+      "description": "Find the latest price and percent change for a stock.",
+      "tags": [
+        "stocks",
+        "market-data",
+        "price",
+        "finance"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "What's the latest price for AAPL?",
+        "Get the current price and change for NVDA."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0019,
+      "price": 0.0052
     },
     {
-      "id": "dashboard_outline",
-      "name": "Dashboard Outline",
-      "description": "Recommend charts and dashboard structure for the data.",
-      "tags": ["data", "visualization", "dashboard"],
-      "examples": [
-        "Propose a KPI dashboard for this product data.",
-        "Suggest chart types for the metrics provided."
+      "id": "company_snapshot",
+      "name": "Company Snapshot",
+      "description": "Provide a quick snapshot including sector and market cap.",
+      "tags": [
+        "stocks",
+        "company",
+        "snapshot",
+        "finance"
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "examples": [
+        "Give a snapshot of Microsoft (MSFT).",
+        "Provide sector and market cap for AMZN."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0021,
+      "price": 0.0055
     }
   ]
 }

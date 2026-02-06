@@ -13,32 +13,62 @@
     "pushNotifications": false,
     "stateTransitionHistory": true
   },
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["application/json", "text/markdown"],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
   "skills": [
     {
       "id": "minutes_summary",
       "name": "Minutes Summary",
       "description": "Create concise meeting summaries and decisions.",
-      "tags": ["meeting", "summary", "operations"],
+      "tags": [
+        "meeting",
+        "summary",
+        "operations"
+      ],
       "examples": [
         "Summarize these meeting notes with decisions.",
         "Produce a short recap of this call."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0037,
+      "price": 0.0076
     },
     {
       "id": "action_items",
       "name": "Action Items",
       "description": "Extract action items with owners and due dates.",
-      "tags": ["meeting", "action-items", "project-management"],
+      "tags": [
+        "meeting",
+        "action-items",
+        "project-management"
+      ],
       "examples": [
         "Extract action items and owners from these notes.",
         "List tasks with due dates from this transcript."
       ],
-      "inputModes": ["text/plain", "application/json"],
-      "outputModes": ["application/json", "text/markdown"]
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0039,
+      "price": 0.0079
     }
   ]
 }
