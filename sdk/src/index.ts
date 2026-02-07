@@ -3,7 +3,6 @@
  * TypeScript SDK for client and agent interactions with AgentTaskEscrow
  */
 
-<<<<<<< HEAD
 export { ClientSDK } from "./client.js";
 export { AgentSDK } from "./agent.js";
 export type { SDKConfig, IpfsConfig } from "./config.js";

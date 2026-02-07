@@ -6,7 +6,6 @@ import {
   getErc20Contract,
   parseTask,
   ensureAllowance,
-<<<<<<< HEAD
 } from "./contract.js";
 import {
   getTasksByClient,
