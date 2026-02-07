@@ -1,0 +1,19 @@
+{
+  "chainId": 114,
+  "network": "coston2-testnet",
+  "timestamp": "2026-02-07T17:21:47.372Z",
+  "contracts": {
+    "FXRP": "0x0b6A3645c240605887a5532109323A3E12273dc7",
+    "FirelightVault": "0x91Bfe6A68aB035DFebb6A770FFfB748C03C0E40B",
+    "AgentTaskEscrow": "0xA4E4C1772d3d2f604734609608009C46C5E32537",
+    "MockOOv3": "0x88E330931Eac139ef4C0a19797b682662a5B8C93"
+  },
+  "sdk": {
+    "escrowAddress": "0xA4E4C1772d3d2f604734609608009C46C5E32537",
+    "fxrpTokenAddress": "0x0b6A3645c240605887a5532109323A3E12273dc7",
+    "fFXRPVaultAddress": "0x91Bfe6A68aB035DFebb6A770FFfB748C03C0E40B",
+    "rpcUrl": "https://coston2-api.flare.network/ext/C/rpc",
+    "chainId": 114,
+    "deploymentBlock": 26987203
+  }
+}
