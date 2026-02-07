@@ -12,11 +12,14 @@ export function AgentRoutesList({ agents }: { agents: RankedAgent[] }) {
     alert('Wallet connection needed for task creation (Phase 2)');
   };
 
+  // Show only top 3 agents
+  const topAgents = agents.slice(0, 3);
+
   return (
     <div className="w-full max-w-2xl space-y-4">
       <h2 className="text-xl font-semibold mb-4">Top Agents for Your Task</h2>
 
-      {agents.map((agent) => (
+      {topAgents.map((agent) => (
         <AgentRouteCard
           key={agent.agent.agentId}
           agent={agent}
