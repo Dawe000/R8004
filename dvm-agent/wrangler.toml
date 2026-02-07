@@ -10,10 +10,9 @@ ENVIRONMENT = "production"
 [triggers]
 crons = ["*/5 * * * *"]
 
-[[durable_objects.bindings]]
-name = "DVM_STATE"
-class_name = "DvmState"
-
-[[migrations]]
-tag = "v1"
-new_classes = ["DvmState"]
+# Create D1 DB first: wrangler d1 create dvm-agent-state
+[[d1_databases]]
+binding = "DB"
+database_name = "dvm-agent-state"
+database_id = "85ed7a3c-6f21-4b9e-a3d2-1c8e5f0b9a4d"
+migrations_dir = "migrations"

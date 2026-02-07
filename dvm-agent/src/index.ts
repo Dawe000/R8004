@@ -3,14 +3,12 @@
  * Cron-triggered: fetches escalated disputes, Venice decides, pushResolution.
  */
 
-import { DvmState } from "./DvmState";
 import { resolvePendingDisputes } from "./disputeResolver";
+import { createD1State } from "./db";
 import { PLASMA_TESTNET_DEFAULTS } from "@erc8001/agent-task-sdk";
 
-export { DvmState };
-
 export interface Env {
-  DVM_STATE: DurableObjectNamespace<DvmState>;
+  DB: D1Database;
   VENICE_API_KEY: string;
   DVM_PRIVATE_KEY: string;
   RPC_URL: string;
@@ -61,7 +59,7 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    const stub = env.DVM_STATE.get(env.DVM_STATE.idFromName("dvm-state"));
+    const dvmState = createD1State(env.DB);
 
     const dvmEnv = {
       VENICE_API_KEY: env.VENICE_API_KEY,
@@ -77,10 +75,7 @@ export default {
     ctx.waitUntil(
       (async () => {
         try {
-          const results = await resolvePendingDisputes(dvmEnv, {
-            isProcessed: (id) => stub.isProcessed(id),
-            markProcessed: (id) => stub.markProcessed(id),
-          });
+          const results = await resolvePendingDisputes(dvmEnv, dvmState);
           console.log(
             "DVM cron: processed",
             results.length,

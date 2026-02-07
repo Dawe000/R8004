@@ -16,6 +16,7 @@ import {
   PLASMA_TESTNET_DEFAULTS,
 } from "@erc8001/agent-task-sdk";
 import { VeniceDisputeService } from "./services/veniceDispute";
+import type { D1State } from "./db";
 
 const DEFAULT_IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 const PLASMA_BLOCK_TIME_SEC = 2;
@@ -35,11 +36,6 @@ export interface DvmEnv {
   DEPLOYMENT_BLOCK?: number;
 }
 
-export interface DvmStateStub {
-  isProcessed(assertionId: string): Promise<boolean>;
-  markProcessed(assertionId: string): Promise<void>;
-}
-
 export interface ResolveResult {
   taskId: bigint;
   assertionId: string;
@@ -51,7 +47,7 @@ export interface ResolveResult {
 
 export async function resolvePendingDisputes(
   env: DvmEnv,
-  dvmState: DvmStateStub
+  dvmState: D1State
 ): Promise<ResolveResult[]> {
   const provider = new JsonRpcProvider(env.RPC_URL);
   const wallet = new Wallet(env.DVM_PRIVATE_KEY, provider);
@@ -171,6 +167,7 @@ export async function resolvePendingDisputes(
     }
   }
 
+  await dvmState.setLastCheckedBlock(currentBlock);
   return results;
 }
 

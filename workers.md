@@ -72,7 +72,8 @@ Cron-triggered worker that resolves UMA disputes for AgentTaskEscrow:
 
 ### Setup
 
-1. Copy `.dev.vars.example` to `.dev.vars` and set:
+1. Create D1 database: `wrangler d1 create dvm-agent-state` then put the returned `database_id` in `wrangler.toml`.
+2. Copy `.dev.vars.example` to `.dev.vars` and set:
    - `VENICE_API_KEY` – Venice AI API key
    - `DVM_PRIVATE_KEY` – Wallet private key (needs XPL for gas on Plasma testnet)
    - `RPC_URL` – Plasma testnet RPC (default: https://testnet-rpc.plasma.to)
