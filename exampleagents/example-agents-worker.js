@@ -37,7 +37,8 @@ import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
 import { AgentSDK } from '../sdk/src/agent.ts';
 import { fetchTaskSpecFromOnchainUri } from '../sdk/src/taskSpec.ts';
 import { getAgentTaskAction } from '../sdk/src/tasks.ts';
-import { JsonRpcProvider, Wallet } from '../sdk/node_modules/ethers/lib.esm/index.js';
+import { uploadFile } from '../sdk/src/ipfs.ts';
+import { JsonRpcProvider, Wallet, keccak256 } from '../sdk/node_modules/ethers/lib.esm/index.js';
 const TASK_STATUS = {
   SUBMITTED: 'submitted',
   RUNNING: 'running',
@@ -224,7 +225,7 @@ export async function runScheduledCron(event, env, deps = {}) {
 
   const summary = await runScheduledSettlementsFn(env);
   console.log(
-    `Scheduled settlement run complete. checked=${summary.checked} eligible=${summary.eligible} settled=${summary.settled} failed=${summary.failed} skipped=${summary.skipped}`
+    `Scheduled settlement run complete. checked=${summary.checked} eligible=${summary.eligible} settleEligible=${summary.settleEligible} escalateEligible=${summary.escalateEligible} settled=${summary.settled} escalated=${summary.escalated} failed=${summary.failed} skipped=${summary.skipped}`
   );
   if (summary.failedTasks.length > 0) {
     console.log(
@@ -1091,7 +1092,14 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
 
     if (erc8001Request) {
       const completedTask = await getTaskById(env, task.id);
-      const assertMeta = await assertErc8001Completion(env, task, completedTask, erc8001Request, result);
+      const assertMeta = await assertErc8001Completion(
+        env,
+        task,
+        completedTask,
+        erc8001Request,
+        result,
+        erc8001Meta
+      );
       await updateTaskResponseMeta(env, task.id, {
         ...responseMeta,
         erc8001: {
@@ -1125,6 +1133,31 @@ async function findLatestTaskByOnchainTaskId(env, agentId, onchainTaskId) {
       `
     )
     .bind(agentId, PENDING_TASK_LOOKUP_LIMIT)
+    .all();
+
+  const candidates = Array.isArray(rows?.results) ? rows.results : [];
+  for (const task of candidates) {
+    const requestPayload = safeJsonParse(task.request_payload_json) || {};
+    const erc8001 = parseErc8001Request(requestPayload);
+    if (erc8001?.taskId === onchainTaskId) {
+      return task;
+    }
+  }
+
+  return null;
+}
+
+async function findLatestTaskByOnchainTaskIdAnyAgent(env, onchainTaskId) {
+  const db = requireDb(env);
+  const rows = await db
+    .prepare(
+      `
+        SELECT * FROM tasks
+        ORDER BY created_at DESC
+        LIMIT ?
+      `
+    )
+    .bind(PENDING_TASK_LOOKUP_LIMIT)
     .all();
 
   const candidates = Array.isArray(rows?.results) ? rows.results : [];
@@ -1228,14 +1261,174 @@ async function runScheduledSettlements(env) {
     sdk,
     address,
     provider,
+    env,
   });
+}
+
+async function updateEscalationMetadata(env, localTask, patch) {
+  if (!localTask?.id) {
+    return;
+  }
+
+  const latestTask = (await getTaskById(env, localTask.id)) || localTask;
+  const responseMeta = safeJsonParse(latestTask.response_meta_json);
+  const responseMetaObject = isPlainObject(responseMeta) ? responseMeta : {};
+  const erc8001Meta = isPlainObject(responseMetaObject.erc8001)
+    ? responseMetaObject.erc8001
+    : {};
+  const escalationMeta = isPlainObject(erc8001Meta.escalation)
+    ? erc8001Meta.escalation
+    : {};
+
+  const nextErc8001Meta = {
+    ...erc8001Meta,
+    ...(isPlainObject(patch?.erc8001) ? patch.erc8001 : {}),
+    escalation: {
+      ...escalationMeta,
+      ...(isPlainObject(patch?.escalation) ? patch.escalation : {}),
+    },
+  };
+
+  await updateTaskResponseMeta(env, latestTask.id, {
+    ...responseMetaObject,
+    erc8001: nextErc8001Meta,
+  });
+}
+
+export async function runDisputeEscalationForTask({
+  env,
+  sdk,
+  onchainTask,
+  uploadEvidenceFn = uploadFile,
+  findLocalTaskFn = findLatestTaskByOnchainTaskIdAnyAgent,
+  updateEscalationMetadataFn = updateEscalationMetadata,
+}) {
+  const onchainTaskId = onchainTask.id.toString();
+  const localTask = await findLocalTaskFn(env, onchainTaskId);
+  if (!localTask) {
+    return {
+      status: 'retryable_error',
+      code: 'local_task_not_found',
+      reason: `No matching local task run for onchainTaskId=${onchainTaskId}`,
+    };
+  }
+
+  const responseMeta = safeJsonParse(localTask.response_meta_json);
+  const responseMetaObject = isPlainObject(responseMeta) ? responseMeta : {};
+  const erc8001Meta = isPlainObject(responseMetaObject.erc8001)
+    ? responseMetaObject.erc8001
+    : {};
+  const escalationMeta = isPlainObject(erc8001Meta.escalation)
+    ? erc8001Meta.escalation
+    : {};
+  const previousAttempts = Number(escalationMeta.attempts);
+  const attempts =
+    Number.isFinite(previousAttempts) && previousAttempts > 0
+      ? previousAttempts + 1
+      : 1;
+  const attemptTimestamp = nowIso();
+
+  const writeErrorMeta = async (code, message) => {
+    const erc8001Patch =
+      typeof erc8001Meta.assertionPayloadHash === 'string'
+        ? { assertionPayloadHash: erc8001Meta.assertionPayloadHash }
+        : {};
+    await updateEscalationMetadataFn(env, localTask, {
+      erc8001: erc8001Patch,
+      escalation: {
+        attempts,
+        lastAttemptAt: attemptTimestamp,
+        lastErrorCode: code,
+        lastErrorMessage: message,
+      },
+    });
+  };
+
+  const assertionPayloadB64 =
+    typeof erc8001Meta.assertionPayloadB64 === 'string'
+      ? erc8001Meta.assertionPayloadB64
+      : '';
+  if (!assertionPayloadB64) {
+    const message = `Task ${localTask.id} is missing assertionPayloadB64`;
+    await writeErrorMeta('assertion_payload_missing', message);
+    return { status: 'retryable_error', code: 'assertion_payload_missing', reason: message };
+  }
+
+  let payloadBytes;
+  try {
+    payloadBytes = base64ToBytes(assertionPayloadB64);
+  } catch (error) {
+    const message = `Failed to decode assertion payload base64: ${error?.message || String(error)}`;
+    await writeErrorMeta('assertion_payload_decode_failed', message);
+    return {
+      status: 'retryable_error',
+      code: 'assertion_payload_decode_failed',
+      reason: message,
+    };
+  }
+
+  const computedHash = keccak256(payloadBytes);
+  const onchainResultHash = String(onchainTask.resultHash || '').toLowerCase();
+  if (!onchainResultHash || computedHash.toLowerCase() !== onchainResultHash) {
+    const message = `Assertion payload hash mismatch (expected ${onchainResultHash}, got ${computedHash})`;
+    await writeErrorMeta('hash_mismatch', message);
+    return { status: 'retryable_error', code: 'hash_mismatch', reason: message };
+  }
+
+  const ipfsConfig = resolveWorkerIpfsConfig(env);
+  if (!ipfsConfig) {
+    const message =
+      'Set PINATA_JWT or NFT_STORAGE_API_KEY for worker IPFS uploads (or IPFS_PROVIDER=mock for local testing).';
+    await writeErrorMeta('ipfs_config_missing', message);
+    return { status: 'retryable_error', code: 'ipfs_config_missing', reason: message };
+  }
+
+  let evidenceUri;
+  try {
+    evidenceUri = await uploadEvidenceFn(payloadBytes, ipfsConfig);
+  } catch (error) {
+    const message = `IPFS upload failed: ${error?.message || String(error)}`;
+    await writeErrorMeta('ipfs_upload_failed', message);
+    return { status: 'retryable_error', code: 'ipfs_upload_failed', reason: message };
+  }
+
+  try {
+    await sdk.escalateToUMA(onchainTask.id, evidenceUri);
+  } catch (error) {
+    const message = `escalateToUMA failed: ${error?.message || String(error)}`;
+    await writeErrorMeta('escalate_tx_failed', message);
+    return { status: 'retryable_error', code: 'escalate_tx_failed', reason: message };
+  }
+
+  await updateEscalationMetadataFn(env, localTask, {
+    erc8001: {
+      assertionPayloadHash: computedHash,
+      assertionPayloadB64: assertionPayloadB64,
+      assertionCapturedAt:
+        typeof erc8001Meta.assertionCapturedAt === 'string'
+          ? erc8001Meta.assertionCapturedAt
+          : attemptTimestamp,
+    },
+    escalation: {
+      attempts,
+      lastAttemptAt: attemptTimestamp,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      evidenceUri,
+      escalatedAt: nowIso(),
+    },
+  });
+
+  return { status: 'escalated', evidenceUri };
 }
 
 export async function runScheduledSettlementsWithSdk({
   sdk,
   address,
   provider,
+  env,
   logger = console,
+  runDisputeEscalationForTaskFn = runDisputeEscalationForTask,
 }) {
   const latestBlock = await provider.getBlock('latest');
   const blockTimestamp = BigInt(
@@ -1245,7 +1438,10 @@ export async function runScheduledSettlementsWithSdk({
   const summary = {
     checked: tasks.length,
     eligible: 0,
+    settleEligible: 0,
+    escalateEligible: 0,
     settled: 0,
+    escalated: 0,
     failed: 0,
     skipped: 0,
     failedTasks: [],
@@ -1257,22 +1453,66 @@ export async function runScheduledSettlementsWithSdk({
 
   for (const task of tasks) {
     const action = getAgentTaskAction(task, blockTimestamp);
-    if (action !== 'settleNoContest') {
-      summary.skipped += 1;
+    if (action === 'settleNoContest') {
+      summary.eligible += 1;
+      summary.settleEligible += 1;
+      try {
+        await sdk.settleNoContest(task.id);
+        summary.settled += 1;
+      } catch (error) {
+        summary.failed += 1;
+        summary.failedTasks.push({
+          taskId: task.id.toString(),
+          action,
+          reason: error?.message || String(error),
+        });
+      }
       continue;
     }
 
-    summary.eligible += 1;
-    try {
-      await sdk.settleNoContest(task.id);
-      summary.settled += 1;
-    } catch (error) {
-      summary.failed += 1;
-      summary.failedTasks.push({
-        taskId: task.id.toString(),
-        reason: error?.message || String(error),
-      });
+    if (action === 'escalateToUMA') {
+      summary.eligible += 1;
+      summary.escalateEligible += 1;
+      if (!env) {
+        summary.skipped += 1;
+        continue;
+      }
+
+      try {
+        const escalationResult = await runDisputeEscalationForTaskFn({
+          env,
+          sdk,
+          onchainTask: task,
+        });
+        if (escalationResult?.status === 'escalated') {
+          summary.escalated += 1;
+          logger.log(
+            `Scheduled escalation success taskId=${task.id.toString()} evidenceUri=${escalationResult.evidenceUri}`
+          );
+        } else {
+          summary.failed += 1;
+          summary.failedTasks.push({
+            taskId: task.id.toString(),
+            action,
+            reason: escalationResult?.reason || 'Escalation skipped due to retryable error.',
+            code: escalationResult?.code || 'unknown',
+          });
+          logger.log(
+            `Scheduled escalation retryable-error taskId=${task.id.toString()} code=${escalationResult?.code || 'unknown'} reason=${escalationResult?.reason || 'unknown'}`
+          );
+        }
+      } catch (error) {
+        summary.failed += 1;
+        summary.failedTasks.push({
+          taskId: task.id.toString(),
+          action,
+          reason: error?.message || String(error),
+        });
+      }
+      continue;
     }
+
+    summary.skipped += 1;
   }
 
   return summary;
@@ -1333,7 +1573,42 @@ function normalizeBaseUrl(url) {
   return url.replace(/\/+$/, '');
 }
 
-async function assertErc8001Completion(env, task, completedTask, erc8001Request, executionResult) {
+async function persistAssertionSnapshotMeta(env, dbTask, existingErc8001Meta, snapshot) {
+  if (!dbTask?.id) {
+    return;
+  }
+
+  const responseMeta = safeJsonParse(dbTask.response_meta_json) || {};
+  const responseMetaObject = isPlainObject(responseMeta) ? responseMeta : {};
+  const erc8001Meta = isPlainObject(responseMetaObject.erc8001) ? responseMetaObject.erc8001 : {};
+  const fallbackMeta = isPlainObject(existingErc8001Meta) ? existingErc8001Meta : {};
+
+  const mergedErc8001 = {
+    ...fallbackMeta,
+    ...erc8001Meta,
+    ...((erc8001Meta.assertionPayloadB64 || fallbackMeta.assertionPayloadB64)
+      ? {}
+      : {
+          assertionPayloadB64: snapshot.assertionPayloadB64,
+          assertionPayloadHash: snapshot.assertionPayloadHash,
+          assertionCapturedAt: snapshot.assertionCapturedAt,
+        }),
+  };
+
+  await updateTaskResponseMeta(env, dbTask.id, {
+    ...responseMetaObject,
+    erc8001: mergedErc8001,
+  });
+}
+
+async function assertErc8001Completion(
+  env,
+  task,
+  completedTask,
+  erc8001Request,
+  executionResult,
+  existingErc8001Meta
+) {
   const { sdk, address } = await getErc8001Sdk(env);
   const onchainTaskId = BigInt(erc8001Request.taskId);
   const onchainTask = await sdk.getTask(onchainTaskId);
@@ -1342,14 +1617,24 @@ async function assertErc8001Completion(env, task, completedTask, erc8001Request,
   const signerAddress = address.toLowerCase();
 
   const resultURI = buildResultUri(task.agent_id, task.id, erc8001Request, env);
-  const resultPayload = JSON.stringify(
+  const snapshot = createAssertionPayloadSnapshot(JSON.stringify(
     formatTaskForClient(completedTask) || executionResult || {}
+  ));
+
+  await persistAssertionSnapshotMeta(
+    env,
+    completedTask || task,
+    existingErc8001Meta,
+    snapshot
   );
 
   if (status === 3 || status === 8) {
     return {
       assertedAt: 'already-asserted',
       resultURI: onchainTask.resultURI || resultURI,
+      assertionPayloadB64: snapshot.assertionPayloadB64,
+      assertionPayloadHash: snapshot.assertionPayloadHash,
+      assertionCapturedAt: snapshot.assertionCapturedAt,
     };
   }
 
@@ -1365,11 +1650,14 @@ async function assertErc8001Completion(env, task, completedTask, erc8001Request,
     );
   }
 
-  await sdk.assertCompletion(onchainTaskId, resultPayload, resultURI);
+  await sdk.assertCompletion(onchainTaskId, snapshot.payloadText, resultURI);
 
   return {
     assertedAt: nowIso(),
     resultURI,
+    assertionPayloadB64: snapshot.assertionPayloadB64,
+    assertionPayloadHash: snapshot.assertionPayloadHash,
+    assertionCapturedAt: snapshot.assertionCapturedAt,
   };
 }
 
@@ -1475,6 +1763,82 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveWorkerIpfsConfig(env) {
+  const uriScheme = env.IPFS_URI_SCHEME === 'https' ? 'https' : 'ipfs';
+
+  if (env.PINATA_JWT) {
+    return {
+      provider: 'pinata',
+      apiKey: env.PINATA_JWT,
+      uriScheme,
+    };
+  }
+
+  if (env.NFT_STORAGE_API_KEY) {
+    return {
+      provider: 'nft.storage',
+      apiKey: env.NFT_STORAGE_API_KEY,
+      uriScheme,
+    };
+  }
+
+  if (env.IPFS_PROVIDER === 'mock') {
+    return {
+      provider: 'mock',
+      uriScheme,
+    };
+  }
+
+  return null;
+}
+
+function bytesToBase64(bytes) {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64');
+  }
+  if (typeof btoa === 'function') {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+  throw new Error('Base64 encoding is not available in this runtime');
+}
+
+function base64ToBytes(value) {
+  if (typeof Buffer !== 'undefined') {
+    return Uint8Array.from(Buffer.from(value, 'base64'));
+  }
+  if (typeof atob === 'function') {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+  throw new Error('Base64 decoding is not available in this runtime');
+}
+
+function createAssertionPayloadSnapshot(resultPayload) {
+  const payloadText = typeof resultPayload === 'string' ? resultPayload : JSON.stringify(resultPayload ?? null);
+  const payloadBytes = new TextEncoder().encode(payloadText);
+  return {
+    payloadText,
+    payloadBytes,
+    assertionPayloadB64: bytesToBase64(payloadBytes),
+    assertionPayloadHash: keccak256(payloadBytes),
+    assertionCapturedAt: nowIso(),
+  };
 }
 
 function requireDb(env) {

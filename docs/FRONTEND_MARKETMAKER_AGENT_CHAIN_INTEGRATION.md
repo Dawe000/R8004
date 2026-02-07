@@ -24,6 +24,11 @@ This integration uses direct frontend-to-agent execution handoff while keeping m
 9. Agent executes, stores result in D1, then calls `assertCompletion(..., resultURI)`.
 10. Frontend polls chain and fetches result from on-chain `resultURI`.
 11. Example-agent settlement cron (`*/5 * * * *`) automatically calls `settleNoContest` after cooldown when eligible.
+12. If a task is disputed, the same cron can automatically escalate:
+    - reads stored asserted payload snapshot from D1 metadata
+    - verifies `keccak256(payloadBytes)` equals on-chain `resultHash`
+    - uploads raw payload bytes to IPFS
+    - calls `escalateToUMA` using the IPFS URI as `agentEvidenceURI`
 
 ## 3) Component changes
 
@@ -94,8 +99,22 @@ Changes:
   - `specVersion`
   - `inputSource: "onchain-ipfs"`
   - `specError` on failure
+- Assertion snapshot metadata now records:
+  - `assertionPayloadB64`
+  - `assertionPayloadHash`
+  - `assertionCapturedAt`
+- Dispute escalation metadata now records:
+  - `erc8001.escalation.attempts`
+  - `erc8001.escalation.lastAttemptAt`
+  - `erc8001.escalation.lastErrorCode`
+  - `erc8001.escalation.lastErrorMessage`
+  - `erc8001.escalation.evidenceUri`
+  - `erc8001.escalation.escalatedAt`
 - Added optional env/config:
   - `ERC8001_DEPLOYMENT_BLOCK`
+  - `PINATA_JWT` or `NFT_STORAGE_API_KEY` (for escalation evidence uploads)
+  - `IPFS_PROVIDER=mock` (local testing)
+  - `IPFS_URI_SCHEME`
 
 ### Marketmaker
 
@@ -148,3 +167,28 @@ Optional:
 - No contract ABI or contract logic changes.
 - No change to contestation mechanics.
 - Marketmaker semantic matching remains in place.
+
+## 7) Frontend contestation UX (current)
+
+Contestation controls are exposed in both:
+
+- Home active task panel
+- Activity task details dialog
+
+Behavior:
+
+- `Dispute Result` is available only when:
+  - connected wallet is the task client
+  - task status is `ResultAsserted`
+  - cooldown/dispute window is still open
+  - evidence URI is valid (`ipfs://`, `https://`, `http://`, `ar://`)
+- `Settle Agent Conceded` is available only when:
+  - connected wallet is the task client
+  - task status is `DisputedAwaitingAgent`
+  - `cooldownEndsAt + agentResponseWindow` has passed
+
+Notes:
+
+- Evidence mode is URI-only in frontend (no file upload flow in this pass).
+- On-chain task state remains source of truth.
+- UI eligibility is advisory; transaction success/failure is final authority.
