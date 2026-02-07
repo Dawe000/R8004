@@ -63,6 +63,9 @@ const agentSdk = new AgentSDK(config, wallet);
 | `settleAgentConceded(taskId)` | Settle when agent conceded (no UMA escalation). |
 | `timeoutCancellation(taskId, reason)` | Cancel due to deadline exceeded. |
 | `getTask(taskId)` | Fetch task state. |
+| `getMyTasks(inProgressOnly?)` | Get tasks created by this client (uses signer address). |
+| `getTasksNeedingAction()` | Get tasks where client can act (dispute, settleAgentConceded, timeoutCancel). |
+| `fetchEvidenceForTask(taskId, options?)` | Fetch client and agent evidence from task (from clientEvidenceURI, agentEvidenceURI). |
 | `matchAgents(request)` | Query market maker for matching agents. |
 
 ## Agent SDK
@@ -75,6 +78,74 @@ const agentSdk = new AgentSDK(config, wallet);
 | `settleNoContest(taskId)` | Settle after cooldown with no dispute. |
 | `cannotComplete(taskId, reason)` | Signal agent cannot complete. |
 | `getTask(taskId)` | Fetch task state. |
+| `getMyTasks(inProgressOnly?)` | Get tasks accepted by this agent (uses signer address). |
+| `getTasksNeedingAction()` | Get tasks where agent can act (settleNoContest, escalateToUMA). |
+
+## Task Listing and Status Helpers
+
+Standalone functions (Provider-only, no signer required):
+
+| Function | Description |
+|----------|-------------|
+| `getNextTaskId(escrowAddress, provider)` | Get next task ID (total task count). |
+| `getTask(escrowAddress, provider, taskId)` | Fetch task by ID. |
+| `getTaskDescriptionUri(escrowAddress, provider, taskId)` | Fetch task description URI from TaskCreated event (null if none). |
+| `getEscrowConfig(escrowAddress, provider)` | Fetch escrow timing and bond params (cooldownPeriod, agentResponseWindow, disputeBondBps, escalationBondBps, umaConfig). |
+| `getTasksByClient(escrowAddress, provider, clientAddress)` | Get tasks created by client. |
+| `getTasksByAgent(escrowAddress, provider, agentAddress)` | Get tasks accepted by agent. |
+| `getTasksByIdRange(escrowAddress, provider, fromId, toId)` | Fetch tasks by ID range. |
+| `getClientIntents(escrowAddress, provider, clientAddress, inProgressOnly?)` | Client intents (optionally in-progress only). |
+| `getAgentCommitments(escrowAddress, provider, agentAddress, inProgressOnly?)` | Agent commitments (optionally in-progress only). |
+| `getClientTasksNeedingAction(...)` | Tasks where client can take action. |
+| `getAgentTasksNeedingAction(...)` | Tasks where agent can take action. |
+
+Status helpers: `isInProgress(task)`, `isContested(task)`, `isResolved(task)`, `isCooldownExpired(task, blockTimestamp)`, `isDeadlinePassed(task, blockTimestamp)`.
+
+Action helpers: `needsClientDisputeBond(task)`, `needsAgentEscalationBond(task)`, `canClientSettleAgentConceded(...)`, `canAgentSettleNoContest(...)`, `canClientTimeoutCancel(...)`.
+
+Bond amounts: `getDisputeBondAmount(task, disputeBondBps)`, `getEscalationBondAmount(task, escalationBondBps, umaMinBond)`.
+
+Use `getEscrowConfig` to obtain `agentResponseWindow`, `disputeBondBps`, and `umaConfig.minimumBond` for status helpers and bond calculations. Use `getTaskDescriptionUri` with `fetchFromIpfs` to load task spec when deciding whether to dispute.
+
+## IPFS Fetch (Evidence)
+
+Read content from IPFS URIs (no API key needed):
+
+| Function | Description |
+|----------|-------------|
+| `fetchFromIpfs(uri, options?)` | Fetch content at ipfs://CID or https://gateway/ipfs/CID. Options: `gateway`, `asJson`. |
+| `fetchClientEvidence(uri, options?)` | Fetch content at client evidence URI. |
+| `fetchAgentEvidence(uri, options?)` | Fetch content at agent evidence URI. |
+| `fetchTaskEvidence(task, options?)` | Fetch both clientEvidenceURI and agentEvidenceURI; returns `{ clientEvidence?, agentEvidence? }`. Skips empty URIs. |
+
+Default gateway: `https://ipfs.io/ipfs/`. Use `asJson: true` to parse JSON.
+
+## Cron Agent Flow
+
+Autonomous cron agents can check statuses, inspect evidence, and decide whether to dispute:
+
+1. `clientSdk.getTasksNeedingAction()` – tasks where client can act
+2. For each task with `needsClientDisputeBond(task) && !isCooldownExpired(task, blockTimestamp)`: fetch evidence via `fetchFromIpfs(task.clientEvidenceURI)` or `clientSdk.fetchEvidenceForTask(taskId)`
+3. Apply custom logic (e.g. LLM, rules) to decide whether to dispute
+4. If dispute: `clientSdk.disputeTask(taskId, evidenceObject)` (uploads new evidence) or pass existing URI
+5. For `canClientSettleAgentConceded`: `clientSdk.settleAgentConceded(taskId)`
+6. For `canClientTimeoutCancel`: `clientSdk.timeoutCancellation(taskId, reason)`
+
+Example:
+
+```typescript
+const tasks = await clientSdk.getTasksNeedingAction();
+for (const task of tasks) {
+  if (needsClientDisputeBond(task) && !isCooldownExpired(task, Date.now() / 1000)) {
+    const evidence = await clientSdk.fetchEvidenceForTask(task.id, { asJson: true });
+    if (shouldDispute(evidence)) await clientSdk.disputeTask(task.id, { reason: "..." });
+  }
+  if (canClientSettleAgentConceded(task, Date.now() / 1000, agentResponseWindow))
+    await clientSdk.settleAgentConceded(task.id);
+  if (canClientTimeoutCancel(task, Date.now() / 1000))
+    await clientSdk.timeoutCancellation(task.id, "deadline exceeded");
+}
+```
 
 ## Configuration
 
@@ -152,9 +223,24 @@ export RPC_URL=http://127.0.0.1:8545
 cd sdk && npm run test:integration
 ```
 
+## Live Plasma Testnet Testing
+
+Run read-only tests against Plasma testnet (chainId 9746):
+
+```bash
+export SDK_LIVE_TESTNET=1
+export MNEMONIC="your twelve word mnemonic"
+cd sdk && npm run test:live
+```
+
+Tests: `getNextTaskId`, `getTask`, `getTasksByClient`, `getTasksByAgent`, status helpers, `getMyTasks`, `getTasksNeedingAction`.
+
+Optional: set `SDK_LIVE_RUN_FLOW=1` to run a full Path A flow (creates task, costs tokens).
+
 ## Scripts
 
 - `npm run build` - Compile TypeScript
-- `npm test` - Run unit tests (excludes integration)
+- `npm test` - Run unit tests (excludes integration and live)
 - `npm run test:integration` - Run integration tests (requires env vars)
+- `npm run test:live` - Run live Plasma testnet tests (requires SDK_LIVE_TESTNET=1, MNEMONIC)
 - `npm run typecheck` - Type check without emit

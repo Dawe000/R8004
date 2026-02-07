@@ -6,6 +6,11 @@ import {
   parseTask,
   ensureAllowance,
 } from "./contract.js";
+import {
+  getTasksByAgent,
+  getAgentTasksNeedingAction,
+  isInProgress,
+} from "./tasks.js";
 import { calculateResultHash, signTaskResult } from "./crypto.js";
 import { uploadJson } from "./ipfs.js";
 
@@ -14,6 +19,13 @@ export class AgentSDK {
     private config: SDKConfig,
     private signer: Signer
   ) {}
+
+  /** Get provider from signer; throws if not available */
+  private getProvider() {
+    const provider = this.signer.provider;
+    if (!provider) throw new Error("Signer has no provider");
+    return provider;
+  }
 
   /** Get task by ID */
   async getTask(taskId: bigint): Promise<Task> {
@@ -88,6 +100,35 @@ export class AgentSDK {
   async settleNoContest(taskId: bigint): Promise<void> {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     await (await escrow.settleNoContest(taskId)).wait();
+  }
+
+  /** Get tasks accepted by this agent (uses signer address) */
+  async getMyTasks(inProgressOnly = false): Promise<Task[]> {
+    const provider = this.getProvider();
+    const address = await this.signer.getAddress();
+    const tasks = await getTasksByAgent(
+      this.config.escrowAddress,
+      provider,
+      address,
+      this.config.deploymentBlock
+    );
+    if (inProgressOnly) return tasks.filter(isInProgress);
+    return tasks;
+  }
+
+  /** Get tasks where this agent can take action (settleNoContest, escalateToUMA) */
+  async getTasksNeedingAction(): Promise<Task[]> {
+    const provider = this.getProvider();
+    const address = await this.signer.getAddress();
+    const block = await provider.getBlock("latest");
+    const blockTimestamp = block?.timestamp ?? Math.floor(Date.now() / 1000);
+    return getAgentTasksNeedingAction(
+      this.config.escrowAddress,
+      provider,
+      address,
+      blockTimestamp,
+      { fromBlock: this.config.deploymentBlock }
+    );
   }
 
   /** Signal agent cannot complete */

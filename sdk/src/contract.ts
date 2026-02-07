@@ -10,6 +10,8 @@ import type { Task, TaskStatus } from "./types.js";
 /** Minimal ABI for AgentTaskEscrow - all functions used by SDK */
 const ESCROW_ABI: InterfaceAbi = [
   "function nextTaskId() external view returns (uint256)",
+  "function cooldownPeriod() external view returns (uint256)",
+  "function agentResponseWindow() external view returns (uint256)",
   "function disputeBondBps() external view returns (uint256)",
   "function escalationBondBps() external view returns (uint256)",
   "function umaConfig() external view returns (tuple(address oracle, uint64 liveness, bytes32 identifier, uint256 minimumBond))",
@@ -24,6 +26,8 @@ const ESCROW_ABI: InterfaceAbi = [
   "function settleNoContest(uint256 taskId) external",
   "function settleAgentConceded(uint256 taskId) external",
   "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, bytes32 umaAssertionId, bool umaResultTruth))",
+  "event TaskCreated(uint256 indexed taskId, address indexed client, string descriptionURI)",
+  "event TaskAccepted(uint256 indexed taskId, address indexed agent, uint256 stake)",
 ];
 
 const ERC20_ABI: InterfaceAbi = [

@@ -207,7 +207,7 @@ async function main() {
     await (await mockOOv3.pushResolution(assertionId, agentWins)).wait();
 
     const taskAfter = await clientSdk.getTask(taskId);
-    if (taskAfter.status !== 8) throw new Error("Expected task status Resolved (8), got " + taskAfter.status);
+    if (Number(taskAfter.status) !== 8) throw new Error("Expected task status Resolved (8), got " + taskAfter.status);
     console.log("Path B (UMA, " + (agentWins ? "agent" : "client") + " wins) complete.");
   } else if (pathArg === "path-c") {
     const deadline = Math.floor(Date.now() / 1000) - 60; // already passed
