@@ -13,7 +13,8 @@ export class AgentMatcher {
 	) {}
 
 	async matchAgents(request: TaskMatchRequest): Promise<RankedAgent[]> {
-		const queryEmbedding = await this.veniceService.generateEmbedding(request.query);
+		const refinedQuery = await this.veniceService.refineQuery(request.query);
+		const queryEmbedding = await this.veniceService.generateEmbedding(refinedQuery);
 		const agents = this.agentRegistry.getAll();
 		const agentById = new Map(agents.map((agent) => [agent.agentId, agent]));
 		const pineconeMatches = await this.pineconeService.queryByVector(

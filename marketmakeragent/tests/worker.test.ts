@@ -88,6 +88,7 @@ test('POST /api/match-agents validates query body', async () => {
 
 test('POST /api/match-agents returns ranked agents using Pinecone matches', async () => {
 	let veniceCalls = 0;
+	let veniceRewriteCalls = 0;
 	let pineconeCalls = 0;
 	let agentsListCalls = 0;
 
@@ -101,6 +102,15 @@ test('POST /api/match-agents returns ranked agents using Pinecone matches', asyn
 				data: [{ object: 'embedding', embedding: [0.11, 0.22, 0.33], index: 0 }],
 				model: 'text-embedding-bge-m3',
 				usage: { prompt_tokens: 5, total_tokens: 5 },
+			});
+		}
+
+		if (asString === 'https://api.venice.ai/api/v1/chat/completions') {
+			veniceRewriteCalls += 1;
+			return jsonResponse({
+				model: 'zai-org-glm-4.7',
+				choices: [{ message: { content: 'Refined query for testing.' } }],
+				usage: { prompt_tokens: 10, total_tokens: 20 },
 			});
 		}
 
@@ -173,6 +183,7 @@ test('POST /api/match-agents returns ranked agents using Pinecone matches', asyn
 		assert.equal(payload.agents[0].agent.agentId, '1');
 		assert.equal(payload.agents[1].agent.agentId, '2');
 		assert.ok(payload.agents[0].score > payload.agents[1].score);
+		assert.equal(veniceRewriteCalls, 1);
 		assert.equal(veniceCalls, 1);
 		assert.equal(pineconeCalls, 1);
 		assert.equal(agentsListCalls, 1);
@@ -184,6 +195,13 @@ test('POST /api/match-agents returns ranked agents using Pinecone matches', asyn
 test('POST /api/match-agents returns 500 when Pinecone query fails', async () => {
 	const restoreFetch = installFetchMock(async (url) => {
 		const asString = url.toString();
+
+		if (asString === 'https://api.venice.ai/api/v1/chat/completions') {
+			return jsonResponse({
+				model: 'zai-org-glm-4.7',
+				choices: [{ message: { content: 'Refined query for testing.' } }],
+			});
+		}
 
 		if (asString === 'https://api.venice.ai/api/v1/embeddings') {
 			return jsonResponse({

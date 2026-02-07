@@ -69,3 +69,29 @@ export interface VeniceEmbeddingResponse {
 		total_tokens: number;
 	};
 }
+
+export interface VeniceChatMessage {
+	role: 'system' | 'user' | 'assistant';
+	content: string | Array<{ text?: string }>;
+}
+
+export interface VeniceChatCompletionRequest {
+	model: string;
+	messages: VeniceChatMessage[];
+	max_tokens?: number;
+	temperature?: number;
+	venice_parameters?: Record<string, unknown>;
+}
+
+export interface VeniceChatCompletionResponse {
+	model?: string;
+	choices?: Array<{
+		message?: {
+			content?: string | Array<{ text?: string }>;
+		};
+	}>;
+	usage?: {
+		prompt_tokens?: number;
+		total_tokens?: number;
+	};
+}

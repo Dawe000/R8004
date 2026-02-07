@@ -12,6 +12,7 @@ test('AgentMatcher ranks by semantic + trust score and ignores unknown Pinecone 
 
 	let veniceCalls = 0;
 	const veniceService = {
+		refineQuery: async (text: string) => text,
 		generateEmbedding: async (_text: string) => {
 			veniceCalls += 1;
 			return [0.1, 0.2, 0.3];
@@ -52,6 +53,7 @@ test('AgentMatcher uses default trust score when trust service is not provided',
 	];
 
 	const veniceService = {
+		refineQuery: async (text: string) => text,
 		generateEmbedding: async (_text: string) => [0.2, 0.4],
 	};
 
