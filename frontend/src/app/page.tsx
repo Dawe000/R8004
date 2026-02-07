@@ -19,12 +19,14 @@ import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { MOCK_TOKEN_ADDRESS, ESCROW_ADDRESS } from '@/config/constants';
 import { parseEther, formatEther } from 'ethers';
 import { useAccount, useReadContract } from 'wagmi';
+import { toast } from 'sonner';
 
 export default function Home() {
   const { address } = useAccount();
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('0.00');
+  const [isCreating, setIsCreating] = useState(false);
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
 
@@ -61,26 +63,57 @@ export default function Home() {
 
   const handleCreateTask = async () => {
     if (!sdk || !query) return;
+    setIsCreating(true);
+    const toastId = toast.loading('Initializing task creation...');
+    
     try {
-      // 1. Create task on-chain
-      // We pass the query as the description for now. 
-      // In a real app, we'd upload a full spec to IPFS.
-      const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+      const amount = parseEther(paymentAmount);
+      
+      // 1. Check Allowance for TST tokens
+      toast.loading('Checking token allowance...', { id: toastId });
+      const { ensureAllowance } = await import('@sdk/index');
+      await (await sdk.client.getTask(0n)); // Warm up
+      
+      // Note: ensureAllowance returns a transaction response if approval is needed
+      const approvalTx = await ensureAllowance(
+        MOCK_TOKEN_ADDRESS,
+        (sdk.client as any).signer, // Access signer from SDK
+        ESCROW_ADDRESS,
+        amount
+      );
+      
+      if (approvalTx) {
+        toast.loading('Waiting for token approval...', { id: toastId });
+        await approvalTx.wait();
+        toast.success('Token approved!', { id: toastId });
+      }
+
+      // 2. Create task on-chain
+      toast.loading('Creating task on-chain...', { id: toastId });
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
       const taskId = await sdk.client.createTask(
         query,
         MOCK_TOKEN_ADDRESS,
-        parseEther(paymentAmount),
+        amount,
         deadline
       );
-      
-      alert(`Task created! ID: ${taskId}. Now depositing payment...`);
 
-      // 2. Deposit payment
-      await sdk.client.depositPayment(taskId);
-      alert('Payment deposited successfully! The agent can now start working.');
+      toast.success(`Task created (ID: ${taskId})! Waiting for agent to accept...`, { id: toastId });
+
+      // Note: Payment will be deposited after agent accepts the task
+      // The agent must call acceptTask() first, then client calls depositPayment()
+      
     } catch (err: any) {
       console.error('Task creation failed:', err);
-      alert(`Error: ${err.message || 'Unknown error'}`);
+      let message = err.message || 'Unknown error';
+      if (message.includes('user rejected')) {
+        message = 'Transaction rejected by user.';
+      } else if (message.includes('execution reverted')) {
+        message = 'Transaction reverted. Do you have enough tokens?';
+      }
+      toast.error(`Error: ${message}`, { id: toastId });
+    } finally {
+      setIsCreating(false);
     }
   };
 
