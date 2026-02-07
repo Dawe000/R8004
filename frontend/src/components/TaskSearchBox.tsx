@@ -1,28 +1,28 @@
 'use client';
 import { useState } from 'react';
-import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 
 export function TaskSearchBox({ onSearch }: { onSearch: (query: string) => void }) {
   const [query, setQuery] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(query);
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    // Debounce or just pass up on blur/submit? For now, let's keep it simple.
+    // The parent might expect 'onSearch' to be triggered. 
+    // Since we removed the form submit, we can trigger onSearch on change or blur.
+    // For this UI, let's just update local state and let the parent access it 
+    // (Note: The current parent implementation expects onSearch to be called to update ITS state).
+    onSearch(val); 
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Describe your task... (e.g., 'What's the sentiment on $BTC today?')"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="pl-12 h-14 text-lg rounded-3xl"
-        />
-      </div>
-    </form>
+    <div className="w-full">
+      <textarea
+        placeholder="Describe your task... (e.g. 'Find the best yield for USDC on Arbitrum and summarize the risks')"
+        value={query}
+        onChange={handleChange}
+        className="w-full bg-transparent border-none text-xl p-0 h-24 placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none resize-none font-medium leading-relaxed"
+      />
+    </div>
   );
 }

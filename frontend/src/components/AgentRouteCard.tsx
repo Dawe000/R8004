@@ -16,50 +16,54 @@ export function AgentRouteCard({
   const trustColor = agent.trustScore > 0.8 ? 'success' : agent.trustScore > 0.6 ? 'warning' : 'secondary';
 
   return (
-    <Card className={`p-6 cursor-pointer transition-all ${selected ? 'ring-2 ring-primary' : ''}`} onClick={onSelect}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-semibold text-lg">{agent.agent.name}</h3>
-            <Badge variant={trustColor as any}>Trust: {(agent.trustScore * 100).toFixed(0)}%</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mb-3">{agent.agent.description}</p>
-
-          {/* Score Bar */}
-          <div className="mb-3">
-            <div className="flex justify-between text-xs mb-1">
-              <span>Match Score</span>
-              <span className="font-medium">{(agent.score * 100).toFixed(0)}%</span>
+    <div className="p-0.5 h-full">
+      <Card 
+        className={`p-4 h-full cursor-pointer transition-all border-2 bg-secondary/20 hover:bg-secondary/40 rounded-2xl flex flex-col justify-between ${selected ? 'border-primary bg-secondary/40' : 'border-transparent'}`} 
+        onClick={onSelect}
+      >
+        <div>
+          {/* Badge Header */}
+          {agent.score > 0.8 && (
+            <div className="mb-3">
+              <span className="bg-primary/20 text-primary text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Best Match</span>
             </div>
-            <div className="h-2 bg-secondary/20 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${agent.score * 100}%` }}
-              />
+          )}
+
+          <div className="flex items-start justify-between mb-3">
+            {/* Left: Agent Info */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary/20">
+                {agent.agent.name.charAt(0)}
+              </div>
+              <div>
+                <h3 className="font-bold text-base leading-tight">{agent.agent.name}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-success">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
+                    {(agent.trustScore * 100).toFixed(0)}% TRUST
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Stake */}
+            <div className="text-right">
+              <div className="font-black text-lg">{(parseFloat(agent.agent.sla.minAcceptanceStake) / 1e18).toFixed(4)}</div>
+              <div className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter">ETH STAKE</div>
             </div>
           </div>
 
-          {/* Details */}
-          <div className="flex gap-4 text-sm text-muted-foreground">
-            <span>Stake: {(parseFloat(agent.agent.sla.minAcceptanceStake) / 1e18).toFixed(4)} ETH</span>
-            <span>ETA: ~{Math.ceil(agent.agent.sla.avgCompletionTime / 60)}min</span>
-          </div>
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {agent.agent.description}
+          </p>
         </div>
 
-        <Button variant={selected ? 'default' : 'outline'} size="sm">
-          {selected ? '✓ Selected' : 'Select'}
-        </Button>
-      </div>
-
-      {/* Expandable Skills */}
-      <details className="mt-4">
-        <summary className="text-sm cursor-pointer text-primary">View Capabilities</summary>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {agent.agent.skills.map((skill, i) => (
-            <Badge key={i} variant="outline">{skill.name}</Badge>
-          ))}
+        {/* Bottom Stats */}
+        <div className="mt-4 pt-3 border-t border-border/30 flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+           <span>ETA: ~{Math.ceil(agent.agent.sla.avgCompletionTime / 60)} MIN</span>
+           <span className="text-primary">Match: {(agent.score * 100).toFixed(0)}%</span>
         </div>
-      </details>
-    </Card>
+      </Card>
+    </div>
   );
 }

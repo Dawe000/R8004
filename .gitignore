@@ -52,3 +52,4 @@ wrangler-account.json
 contracts/cache/
 contracts/artifacts/
 contracts/typechain-types/
+docs/FRONTEND.md
