@@ -149,6 +149,10 @@ export default function Home() {
     ) {
       const response = await fetch(task.resultURI);
       if (!response.ok) {
+        if (response.status === 404) {
+          // Historical/expired result endpoints should not break chain polling.
+          return;
+        }
         throw new Error(`Failed to fetch result URI (${response.status})`);
       }
       const text = await response.text();

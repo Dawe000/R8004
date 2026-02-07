@@ -1,5 +1,5 @@
 import type { Contract, Provider } from "ethers";
-import { getEscrowContract, parseTask } from "./contract";
+import { getEscrowContract, readTaskCompat } from "./contract";
 import { TaskStatus } from "./types";
 import type { Task } from "./types";
 
@@ -169,9 +169,7 @@ export async function getTask(
   provider: Provider,
   taskId: bigint
 ): Promise<Task> {
-  const escrow = getEscrowContract(escrowAddress, provider);
-  const raw = await escrow.getTask(taskId);
-  return parseTask(raw);
+  return readTaskCompat(escrowAddress, provider, taskId);
 }
 
 export async function getTasksByIdRange(

@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { formatEther } from 'ethers';
-import { isLikelyUri } from '@sdk/index';
 import { TaskStatus, type Task } from '@sdk/types';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
-import { canClientDispute, canClientSettleConceded, getContestationTiming } from '@/lib/contestation';
+import { getContestationTiming, getDisputeEligibility, getSettleEligibility } from '@/lib/contestation';
 
 interface TaskContestationActionsProps {
   task: Task;
@@ -33,9 +32,28 @@ function formatDuration(totalSeconds: number | null): string {
   return `${remaining}s`;
 }
 
-function sameAddress(a?: string, b?: string): boolean {
-  if (!a || !b) return false;
-  return a.toLowerCase() === b.toLowerCase();
+function formatTimestamp(unixSec: bigint): string {
+  const date = new Date(Number(unixSec) * 1000);
+  return `${date.toLocaleString()} (${unixSec.toString()})`;
+}
+
+function normalizeTxError(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : 'Unknown error';
+  const message = rawMessage.toLowerCase();
+
+  if (message.includes('user rejected') || message.includes('user denied')) {
+    return 'Transaction rejected in wallet.';
+  }
+
+  if (message.includes('insufficient funds')) {
+    return 'Insufficient funds to cover gas or required token amount.';
+  }
+
+  if (message.includes('execution reverted') || message.includes('call_exception')) {
+    return 'Transaction reverted on-chain. Verify task status, wallet, and dispute timing window.';
+  }
+
+  return rawMessage;
 }
 
 export function TaskContestationActions({
@@ -62,28 +80,25 @@ export function TaskContestationActions({
     setEvidenceUri(task.clientEvidenceURI || '');
   }, [task.id, task.clientEvidenceURI]);
 
-  const isTaskClient = sameAddress(task.client, connectedAddress);
   const responseWindow = agentResponseWindowSec ?? 0n;
+  const trimmedEvidenceUri = evidenceUri.trim();
 
   const timing = useMemo(() => {
     return getContestationTiming(task, nowSec, responseWindow);
   }, [task, nowSec, responseWindow]);
 
-  const canDispute = useMemo(() => {
-    return canClientDispute(task, nowSec, connectedAddress);
-  }, [task, nowSec, connectedAddress]);
+  const disputeEligibility = useMemo(() => {
+    return getDisputeEligibility(task, nowSec, connectedAddress, trimmedEvidenceUri);
+  }, [task, nowSec, connectedAddress, trimmedEvidenceUri]);
 
-  const canSettleConceded = useMemo(() => {
-    if (agentResponseWindowSec === null) return false;
-    return canClientSettleConceded(task, nowSec, agentResponseWindowSec, connectedAddress);
+  const settleEligibility = useMemo(() => {
+    return getSettleEligibility(task, nowSec, agentResponseWindowSec, connectedAddress);
   }, [task, nowSec, agentResponseWindowSec, connectedAddress]);
 
   const expectedDisputeBond = useMemo(() => {
     if (disputeBondBps === null) return null;
     return (task.paymentAmount * disputeBondBps) / 10000n;
   }, [task.paymentAmount, disputeBondBps]);
-
-  const uriLooksValid = isLikelyUri(evidenceUri.trim());
 
   if (task.status !== TaskStatus.ResultAsserted && task.status !== TaskStatus.DisputedAwaitingAgent) {
     return null;
@@ -95,8 +110,8 @@ export function TaskContestationActions({
       return;
     }
 
-    if (!uriLooksValid) {
-      toast.error('Enter a valid evidence URI (ipfs://, https://, http://, ar://).');
+    if (!disputeEligibility.enabled) {
+      toast.error(disputeEligibility.reason ?? 'Task cannot be disputed right now.');
       return;
     }
 
@@ -104,11 +119,11 @@ export function TaskContestationActions({
     const toastId = toast.loading(`Submitting dispute for task ${task.id.toString()}...`);
 
     try {
-      await sdk.client.disputeTask(task.id, evidenceUri.trim());
+      await sdk.client.disputeTask(task.id, trimmedEvidenceUri);
       toast.success('Task disputed. Waiting for agent response window.', { id: toastId });
       await onTaskUpdated?.();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = normalizeTxError(error);
       toast.error(`Dispute failed: ${message}`, { id: toastId });
     } finally {
       setIsDisputing(false);
@@ -121,6 +136,11 @@ export function TaskContestationActions({
       return;
     }
 
+    if (!settleEligibility.enabled) {
+      toast.error(settleEligibility.reason ?? 'Task cannot be settled as agent conceded right now.');
+      return;
+    }
+
     setIsSettling(true);
     const toastId = toast.loading(`Settling task ${task.id.toString()} (agent conceded)...`);
 
@@ -129,28 +149,12 @@ export function TaskContestationActions({
       toast.success('Task settled: client wins by agent concession.', { id: toastId });
       await onTaskUpdated?.();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = normalizeTxError(error);
       toast.error(`Settle failed: ${message}`, { id: toastId });
     } finally {
       setIsSettling(false);
     }
   };
-
-  const disputeDisabledReason = !isTaskClient
-    ? 'Connect with the task client wallet to dispute.'
-    : !canDispute
-      ? timing.label
-      : !uriLooksValid
-        ? 'Provide a valid evidence URI before disputing.'
-        : null;
-
-  const settleDisabledReason = !isTaskClient
-    ? 'Connect with the task client wallet to settle.'
-    : agentResponseWindowSec === null
-      ? 'Loading escrow timing...'
-      : !canSettleConceded
-        ? timing.label
-        : null;
 
   return (
     <div className="space-y-3 rounded-xl border border-orange-400/30 bg-orange-950/20 p-3">
@@ -163,6 +167,9 @@ export function TaskContestationActions({
           {timing.secondsRemaining !== null && (
             <p>{formatDuration(timing.secondsRemaining)} remaining</p>
           )}
+          {timing.deadlineUnix !== null && (
+            <p>Window deadline: {formatTimestamp(timing.deadlineUnix)}</p>
+          )}
         </div>
       </div>
 
@@ -171,6 +178,9 @@ export function TaskContestationActions({
           Expected dispute bond: <span className="font-mono text-orange-100">{formatEther(expectedDisputeBond)} TST</span>
         </p>
       )}
+      <p className="text-[10px] text-orange-200/80">
+        Cooldown ends: <span className="font-mono text-orange-100">{formatTimestamp(task.cooldownEndsAt)}</span>
+      </p>
 
       {task.status === TaskStatus.ResultAsserted && (
         <div className="space-y-2">
@@ -182,13 +192,13 @@ export function TaskContestationActions({
           />
           <button
             onClick={handleDispute}
-            disabled={Boolean(disputeDisabledReason) || isDisputing}
+            disabled={!disputeEligibility.enabled || isDisputing}
             className="w-full rounded-lg bg-orange-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-orange-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDisputing ? 'Submitting Dispute...' : 'Dispute Result'}
           </button>
-          {disputeDisabledReason && (
-            <p className="text-[10px] text-orange-200/80">{disputeDisabledReason}</p>
+          {disputeEligibility.reason && (
+            <p className="text-[10px] text-orange-200/80">{disputeEligibility.reason}</p>
           )}
         </div>
       )}
@@ -197,13 +207,13 @@ export function TaskContestationActions({
         <div className="space-y-2">
           <button
             onClick={handleSettleConceded}
-            disabled={Boolean(settleDisabledReason) || isSettling}
+            disabled={!settleEligibility.enabled || isSettling}
             className="w-full rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSettling ? 'Settling...' : 'Settle Agent Conceded'}
           </button>
-          {settleDisabledReason && (
-            <p className="text-[10px] text-orange-200/80">{settleDisabledReason}</p>
+          {settleEligibility.reason && (
+            <p className="text-[10px] text-orange-200/80">{settleEligibility.reason}</p>
           )}
         </div>
       )}

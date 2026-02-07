@@ -6,6 +6,15 @@ import { History, Loader2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 
+function loadTaskIdsFromStorage(): string[] {
+  if (typeof window === 'undefined') return [];
+  const raw = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((value) => String(value))
+    .filter((value) => /^\d+$/.test(value));
+}
+
 export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
   const { address } = useAccount();
   const sdk = useAgentSDK();
@@ -18,10 +27,8 @@ export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
       setLoading(true);
       try {
         // Use localStorage for task history (works for both quick view and full history)
-        if (typeof window !== 'undefined') {
-          const saved = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
-          setTaskIds([...saved].reverse());
-        }
+        const saved = loadTaskIdsFromStorage();
+        setTaskIds([...saved].reverse());
       } catch (err) {
         console.error('Failed to fetch task history:', err);
       } finally {
@@ -34,10 +41,8 @@ export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
     } else {
       // Local storage fallback for the quick dashboard view
       const updateTasks = () => {
-        if (typeof window !== 'undefined') {
-          const saved = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
-          setTaskIds([...saved].reverse().slice(0, 5));
-        }
+        const saved = loadTaskIdsFromStorage();
+        setTaskIds([...saved].reverse().slice(0, 5));
       };
       updateTasks();
       const interval = setInterval(updateTasks, 5000);

@@ -192,3 +192,6 @@ Notes:
 - Evidence mode is URI-only in frontend (no file upload flow in this pass).
 - On-chain task state remains source of truth.
 - UI eligibility is advisory; transaction success/failure is final authority.
+- Frontend eligibility is normalized through `frontend/src/lib/contestation.ts` helpers:
+  - `getDisputeEligibility(...)`
+  - `getSettleEligibility(...)`

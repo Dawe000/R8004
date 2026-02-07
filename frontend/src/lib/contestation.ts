@@ -1,4 +1,5 @@
 import { TaskStatus, type Task } from '@sdk/types';
+import { isLikelyUri } from '@sdk/index';
 
 function sameAddress(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
@@ -20,6 +21,11 @@ export interface ContestationTiming {
   label: string;
   secondsRemaining: number | null;
   deadlineUnix: bigint | null;
+}
+
+export interface ContestationEligibility {
+  enabled: boolean;
+  reason: string | null;
 }
 
 export function canClientDispute(
@@ -95,5 +101,88 @@ export function getContestationTiming(
     label: 'Task is not in a contestable state',
     secondsRemaining: null,
     deadlineUnix: null,
+  };
+}
+
+export function getDisputeEligibility(
+  task: Task,
+  nowSec: bigint | number,
+  connectedAddress?: string | null,
+  evidenceUri?: string | null
+): ContestationEligibility {
+  if (!sameAddress(task.client, connectedAddress)) {
+    return {
+      enabled: false,
+      reason: 'Connect with the task client wallet to dispute.',
+    };
+  }
+
+  if (task.status !== TaskStatus.ResultAsserted) {
+    return {
+      enabled: false,
+      reason: 'Dispute is only available while task is Result Asserted.',
+    };
+  }
+
+  const timing = getContestationTiming(task, nowSec, 0n);
+  if (!canClientDispute(task, nowSec, connectedAddress)) {
+    return {
+      enabled: false,
+      reason: timing.label,
+    };
+  }
+
+  const trimmedEvidenceUri = evidenceUri?.trim() ?? '';
+  if (!trimmedEvidenceUri || !isLikelyUri(trimmedEvidenceUri)) {
+    return {
+      enabled: false,
+      reason: 'Provide a valid evidence URI (ipfs://, https://, http://, ar://) before disputing.',
+    };
+  }
+
+  return {
+    enabled: true,
+    reason: null,
+  };
+}
+
+export function getSettleEligibility(
+  task: Task,
+  nowSec: bigint | number,
+  agentResponseWindowSec: bigint | number | null,
+  connectedAddress?: string | null
+): ContestationEligibility {
+  if (!sameAddress(task.client, connectedAddress)) {
+    return {
+      enabled: false,
+      reason: 'Connect with the task client wallet to settle.',
+    };
+  }
+
+  if (agentResponseWindowSec === null) {
+    return {
+      enabled: false,
+      reason: 'Loading escrow timing...',
+    };
+  }
+
+  if (task.status !== TaskStatus.DisputedAwaitingAgent) {
+    return {
+      enabled: false,
+      reason: 'Settle Agent Conceded is only available while task is Disputed Awaiting Agent.',
+    };
+  }
+
+  const timing = getContestationTiming(task, nowSec, agentResponseWindowSec);
+  if (!canClientSettleConceded(task, nowSec, agentResponseWindowSec, connectedAddress)) {
+    return {
+      enabled: false,
+      reason: timing.label,
+    };
+  }
+
+  return {
+    enabled: true,
+    reason: null,
   };
 }

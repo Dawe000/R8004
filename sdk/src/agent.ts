@@ -3,8 +3,9 @@ import type { SDKConfig } from "./config";
 import type { Task } from "./types";
 import {
   getEscrowContract,
-  parseTask,
   ensureAllowance,
+  isMissingRevertDataCall,
+  readTaskCompat,
 } from "./contract";
 import {
   getTasksByAgent,
@@ -29,9 +30,7 @@ export class AgentSDK {
 
   /** Get task by ID */
   async getTask(taskId: bigint): Promise<Task> {
-    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
-    const raw = await escrow.getTask(taskId);
-    return parseTask(raw);
+    return readTaskCompat(this.config.escrowAddress, this.signer, taskId);
   }
 
   /** Read whether payment has been deposited for a task */
@@ -43,7 +42,12 @@ export class AgentSDK {
   /** Check whether a token is in the escrow's allowed (whitelist) set for payments and staking */
   async isTokenAllowed(tokenAddress: string): Promise<boolean> {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
-    return escrow.allowedTokens(tokenAddress);
+    try {
+      return await escrow.allowedTokens(tokenAddress);
+    } catch (error) {
+      if (isMissingRevertDataCall(error)) return true;
+      throw error;
+    }
   }
 
   /** Accept task with stake - approves stake token if needed (stakeToken or paymentToken) */

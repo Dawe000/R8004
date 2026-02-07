@@ -4,8 +4,9 @@ import type { Task, TaskMatchRequest, TaskMatchResponse } from "./types";
 import {
   getEscrowContract,
   getErc20Contract,
-  parseTask,
   ensureAllowance,
+  isMissingRevertDataCall,
+  readTaskCompat,
 } from "./contract";
 import {
   getTasksByClient,
@@ -30,9 +31,7 @@ export class ClientSDK {
 
   /** Get task by ID */
   async getTask(taskId: bigint): Promise<Task> {
-    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
-    const raw = await escrow.getTask(taskId);
-    return parseTask(raw);
+    return readTaskCompat(this.config.escrowAddress, this.signer, taskId);
   }
 
   /** Read whether payment has been deposited for a task */
@@ -44,7 +43,13 @@ export class ClientSDK {
   /** Check whether a token is in the escrow's allowed (whitelist) set for payments and staking */
   async isTokenAllowed(tokenAddress: string): Promise<boolean> {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
-    return escrow.allowedTokens(tokenAddress);
+    try {
+      return await escrow.allowedTokens(tokenAddress);
+    } catch (error) {
+      // Backward compatibility: older deployed escrows may not expose allowedTokens(address) publicly.
+      if (isMissingRevertDataCall(error)) return true;
+      throw error;
+    }
   }
 
   /**
@@ -87,9 +92,35 @@ export class ClientSDK {
 
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     const nextId = await escrow.nextTaskId();
-    await (
-      await escrow.createTask(uri, paymentToken, paymentAmount, BigInt(deadline), stakeTokenAddr)
-    ).wait();
+
+    try {
+      await (
+        await escrow["createTask(string,address,uint256,uint256,address)"](
+          uri,
+          paymentToken,
+          paymentAmount,
+          BigInt(deadline),
+          stakeTokenAddr
+        )
+      ).wait();
+    } catch (error) {
+      // Backward compatibility: older deployed escrows use createTask(string,address,uint256,uint256).
+      if (!isMissingRevertDataCall(error)) throw error;
+      if (stakeTokenAddr !== "0x0000000000000000000000000000000000000000") {
+        throw new Error(
+          "This escrow does not support custom stakeToken in createTask (legacy 4-arg interface)."
+        );
+      }
+      await (
+        await escrow["createTask(string,address,uint256,uint256)"](
+          uri,
+          paymentToken,
+          paymentAmount,
+          BigInt(deadline)
+        )
+      ).wait();
+    }
+
     return nextId;
   }
 

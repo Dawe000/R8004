@@ -129,6 +129,11 @@ export function TaskActivity({ taskId }: { taskId: string }) {
       try {
         const response = await fetch(task.resultURI);
         if (!response.ok) {
+          if (response.status === 404) {
+            setResultBody(null);
+            setResultError('Result endpoint returned 404 (historical/unavailable result URI).');
+            return;
+          }
           throw new Error(`Failed to fetch result URI (${response.status})`);
         }
         const text = await response.text();
