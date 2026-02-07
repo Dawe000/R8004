@@ -60,7 +60,7 @@ export function AgentRouteCard({
 
         {/* Bottom Stats */}
         <div className="mt-4 pt-3 border-t border-border/30 flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-           <span>ETA: ~{Math.ceil(agent.agent.sla.avgCompletionTime / 60)} MIN</span>
+           <span>ETA: ~{Math.ceil(agent.agent.sla.avgCompletionTimeSeconds / 60)} MIN</span>
            <span className="text-primary">Match: {(agent.score * 100).toFixed(0)}%</span>
         </div>
       </Card>

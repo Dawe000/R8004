@@ -35,6 +35,30 @@ Match agents to task query
 }
 ```
 
+### `POST /api/agents/:agentId/erc8001/dispatch`
+Dispatch an ERC8001-linked task to a selected agent route (testing flow).
+
+**Request:**
+```json
+{
+  "onchainTaskId": "123",
+  "input": "summarize this prompt",
+  "stakeAmountWei": "1000000000000000",
+  "skill": "optional-skill-id"
+}
+```
+
+**Response:**
+```json
+{
+  "agentId": "1",
+  "runId": "uuid",
+  "status": "accepted",
+  "onchainTaskId": "123",
+  "statusUrl": "/1/tasks/uuid"
+}
+```
+
 **Response:**
 ```json
 {

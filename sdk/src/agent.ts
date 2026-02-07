@@ -34,6 +34,12 @@ export class AgentSDK {
     return parseTask(raw);
   }
 
+  /** Read whether payment has been deposited for a task */
+  async getPaymentDeposited(taskId: bigint): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.paymentDeposited(taskId);
+  }
+
   /** Accept task with stake - approves token if needed */
   async acceptTask(taskId: bigint, stakeAmount: bigint): Promise<void> {
     const task = await this.getTask(taskId);

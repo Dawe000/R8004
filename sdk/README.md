@@ -63,6 +63,7 @@ const agentSdk = new AgentSDK(config, wallet);
 | `settleAgentConceded(taskId)` | Settle when agent conceded (no UMA escalation). |
 | `timeoutCancellation(taskId, reason)` | Cancel due to deadline exceeded. |
 | `getTask(taskId)` | Fetch task state. |
+| `getPaymentDeposited(taskId)` | Read whether client payment has been deposited for task. |
 | `getMyTasks(inProgressOnly?)` | Get tasks created by this client (uses signer address). |
 | `getTasksNeedingAction()` | Get tasks where client can act (dispute, settleAgentConceded, timeoutCancel). |
 | `fetchEvidenceForTask(taskId, options?)` | Fetch client and agent evidence from task (from clientEvidenceURI, agentEvidenceURI). |
@@ -78,6 +79,7 @@ const agentSdk = new AgentSDK(config, wallet);
 | `settleNoContest(taskId)` | Settle after cooldown with no dispute. |
 | `cannotComplete(taskId, reason)` | Signal agent cannot complete. |
 | `getTask(taskId)` | Fetch task state. |
+| `getPaymentDeposited(taskId)` | Read whether client payment has been deposited for task. |
 | `getMyTasks(inProgressOnly?)` | Get tasks accepted by this agent (uses signer address). |
 | `getTasksNeedingAction()` | Get tasks where agent can act (settleNoContest, escalateToUMA). |
 

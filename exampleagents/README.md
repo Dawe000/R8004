@@ -68,6 +68,29 @@ Update `exampleagents/wrangler.toml` with your real D1 `database_id` before depl
 
 Each agent calls Venice AI via `https://api.venice.ai/api/v1/chat/completions` and requires `VENICE_API_KEY`.
 
+## ERC8001 On-Chain Test Flow
+
+For ERC8001 dispatches (`POST /{id}/tasks` payload containing `erc8001`), the worker now:
+
+1. Calls on-chain `acceptTask(taskId, stake)` with the agent signer.
+2. Waits until `paymentDeposited(taskId) == true`.
+3. Executes the task.
+4. Persists the result in D1.
+5. Calls `assertCompletion(taskId, resultHash, signature, resultURI)` where `resultURI` points to `/{id}/tasks/{runId}`.
+
+Required worker config:
+
+- `AGENT_EVM_PRIVATE_KEY` (secret; funded test key used for accept/assert)
+- `ERC8001_CHAIN_ID`
+- `ERC8001_RPC_URL`
+- `ERC8001_ESCROW_ADDRESS`
+- `ERC8001_PUBLIC_BASE_URL`
+
+Optional:
+
+- `ERC8001_PAYMENT_WAIT_MS` (default 600000)
+- `ERC8001_PAYMENT_POLL_MS` (default 5000)
+
 ## Pinecone Vector Sync
 
 After deploying test agents with `wrangler deploy`, run this from repo root to generate Venice embeddings from `exampleagents/agent-cards` and upsert them to Pinecone:

@@ -12,7 +12,7 @@ import {
   getClientTasksNeedingAction,
   isInProgress,
 } from "./tasks";
-import { uploadJson, uploadText, fetchTaskEvidence, isLikelyUri } from "./ipfs";
+import { uploadJson, uploadText, isLikelyUri, fetchTaskEvidence } from "./ipfs";
 import { matchAgents } from "./marketmaker";
 
 export class ClientSDK {
@@ -33,6 +33,12 @@ export class ClientSDK {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     const raw = await escrow.getTask(taskId);
     return parseTask(raw);
+  }
+
+  /** Read whether payment has been deposited for a task */
+  async getPaymentDeposited(taskId: bigint): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.paymentDeposited(taskId);
   }
 
   /**

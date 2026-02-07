@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useEthersSigner } from '@/lib/ethers';
 import { ClientSDK, AgentSDK } from '@sdk/index';
-import { ESCROW_ADDRESS, MARKET_MAKER_URL } from '@/config/constants';
+import { ESCROW_ADDRESS, MARKET_MAKER_URL, DEPLOYMENT_BLOCK } from '@/config/constants';
 import { useChainId } from 'wagmi';
 
 export function useAgentSDK() {
@@ -15,8 +15,9 @@ export function useAgentSDK() {
       escrowAddress: ESCROW_ADDRESS,
       chainId: chainId,
       marketMakerUrl: MARKET_MAKER_URL,
+      deploymentBlock: DEPLOYMENT_BLOCK,
       ipfs: {
-        provider: 'mock' as const, // Default to mock for hackathon
+        provider: 'mock' as const,
         uriScheme: 'ipfs' as const,
       },
     };

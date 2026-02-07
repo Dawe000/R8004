@@ -14,6 +14,7 @@ const ESCROW_ABI: InterfaceAbi = [
   "function agentResponseWindow() external view returns (uint256)",
   "function disputeBondBps() external view returns (uint256)",
   "function escalationBondBps() external view returns (uint256)",
+  "function paymentDeposited(uint256 taskId) external view returns (bool)",
   "function umaConfig() external view returns (tuple(address oracle, uint64 liveness, bytes32 identifier, uint256 minimumBond))",
   "function createTask(string calldata descriptionURI, address paymentToken, uint256 paymentAmount, uint256 deadline) external returns (uint256 taskId)",
   "function acceptTask(uint256 taskId, uint256 stakeAmount) external",
