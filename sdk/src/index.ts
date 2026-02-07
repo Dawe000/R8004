@@ -5,10 +5,12 @@
 
 export { ClientSDK } from "./client";
 export { AgentSDK } from "./agent";
-export type { SDKConfig, IpfsConfig } from "./config";
+export type { SDKConfig, IpfsConfig, FirelightSDKConfig } from "./config";
 export {
   PLASMA_TESTNET_DEFAULTS,
+  COSTON2_FIRELIGHT_DEFAULTS,
   getPlasmaTestnetConfig,
+  getCoston2FirelightConfig,
 } from "./config";
 export type {
   Task,
@@ -32,6 +34,15 @@ export {
 export { matchAgents } from "./marketmaker";
 export { getEscrowContract, getErc20Contract, parseTask, ensureAllowance } from "./contract";
 export type { TaskAction, EscrowTimingConfig, EscrowConfig } from "./tasks";
+export {
+  depositToVault,
+  withdrawFromVault,
+  redeemFromVault,
+  getVaultShareBalance,
+  getVaultExchangeRate,
+  previewDeposit,
+  previewRedeem,
+} from "./vault";
 export {
   getNextTaskId,
   getTask,

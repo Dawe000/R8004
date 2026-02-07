@@ -4,7 +4,7 @@
  * Requires: PINATA_JWT in .env
  */
 import "dotenv/config";
-import { uploadJson, uploadText, fetchFromIpfs } from "../src/ipfs.js";
+import { uploadJson, uploadText, fetchFromIpfs } from "../src/ipfs";
 
 async function main() {
   const jwt = process.env.PINATA_JWT;
