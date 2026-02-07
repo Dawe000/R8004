@@ -33,9 +33,34 @@ To test a deployed Worker, provide the base URL and use `--remote`:
 ```
 AGENT_BASE_URL=https://example-agent.<your-account>.workers.dev node tests/agent-tests.js --remote
 ```
+
+The local test runner applies D1 migrations before starting `wrangler dev`.
+
+## Task Persistence
+
+Tasks are stored in Cloudflare D1 (`tasks` table) and retained for 7 days. The worker uses:
+
+- Sync-first execution (default 20s budget) for `POST /{id}/tasks` and `POST /{id}/a2a/tasks`
+- Async fallback via Cloudflare Queue when sync budget is exceeded
+- D1-backed retrieval on `GET /{id}/tasks/{taskId}` and `GET /{id}/a2a/tasks/{taskId}/status`
+- Scheduled cleanup via cron (`0 */6 * * *`)
+
+Setup commands:
+
+```bash
+wrangler d1 create example-agent-tasks
+wrangler queues create example-agent-task-exec
+wrangler d1 migrations apply example-agent-tasks --local
+wrangler d1 migrations apply example-agent-tasks --remote
+wrangler deploy
+```
+
+Update `exampleagents/wrangler.toml` with your real D1 `database_id` before deploying.
+
 - Health: `/{id}/health`
 - Agent card: `/{id}/card` or `/{id}/.well-known/agent-card.json`
 - Task creation: `POST /{id}/tasks`
+- Task status/result: `GET /{id}/tasks/{taskId}`
 - Telemetry: `/{id}/telemetry`
 - A2A task creation: `POST /{id}/a2a/tasks`
 - A2A task status: `GET /{id}/a2a/tasks/{taskId}/status`

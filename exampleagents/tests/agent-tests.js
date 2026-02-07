@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { setTimeout: delay } = require('timers/promises');
@@ -59,6 +59,25 @@ async function waitForReady() {
     await delay(1000);
   }
   throw new Error('Timed out waiting for wrangler dev to be ready.');
+}
+
+function runLocalMigrations() {
+  const migration = spawnSync(
+    'wrangler',
+    ['d1', 'migrations', 'apply', 'example-agent-tasks', '--local'],
+    {
+      cwd: EXAMPLEAGENTS_DIR,
+      env: {
+        ...process.env,
+        WRANGLER_SEND_METRICS: 'false',
+      },
+      stdio: 'inherit',
+    }
+  );
+
+  if (migration.status !== 0) {
+    throw new Error('Failed to apply local D1 migrations.');
+  }
 }
 
 async function fetchAgentIds() {
@@ -140,6 +159,180 @@ async function testVeniceResponse({ requireLocalKey }) {
     outputText.includes('TEST_OK') || rawText.includes('TEST_OK'),
     `Venice response did not include TEST_OK. Output: ${outputText || rawText}`
   );
+
+  const statusRes = await fetch(`${BASE_URL}/1/tasks/${data.id}`);
+  assert(statusRes.ok, `Persisted task fetch failed with ${statusRes.status}`);
+  const statusData = await statusRes.json();
+  assert(statusData.status === 'completed', 'Persisted task is not completed');
+  assert(statusData.result, 'Persisted task result missing');
+}
+
+async function testPersistenceFastPath() {
+  const payload = {
+    task: {
+      input: 'Return JSON with summary containing FAST_PATH_OK.',
+    },
+  };
+
+  const res = await fetch(`${BASE_URL}/1/tasks?syncTimeoutMs=60000`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  assert(res.status === 200, `Expected fast-path 200, received ${res.status}`);
+  const task = await res.json();
+  assert(task.id, 'Fast-path task missing id');
+  assert(task.status === 'completed', 'Fast-path task was not completed');
+
+  const getRes = await fetch(`${BASE_URL}/1/tasks/${task.id}`);
+  assert(getRes.ok, `GET persisted fast-path task failed with ${getRes.status}`);
+  const persisted = await getRes.json();
+  assert(persisted.status === 'completed', 'Persisted fast-path task not completed');
+  assert(
+    persisted.result && (persisted.result.output || persisted.result.raw),
+    'Persisted fast-path task missing Venice output content'
+  );
+}
+
+async function pollTask(agentId, taskId, { channel = 'tasks', timeoutMs = 90000 } = {}) {
+  const start = Date.now();
+  const observedStatuses = [];
+
+  while (Date.now() - start < timeoutMs) {
+    const statusUrl =
+      channel === 'a2a'
+        ? `${BASE_URL}/${agentId}/a2a/tasks/${taskId}/status`
+        : `${BASE_URL}/${agentId}/tasks/${taskId}`;
+    const res = await fetch(statusUrl);
+
+    if (res.status === 404) {
+      return { done: true, deleted: true, observedStatuses };
+    }
+
+    assert(res.ok, `Polling failed with ${res.status}`);
+    const data = await res.json();
+    const status = channel === 'a2a' ? data.status : data.status;
+    observedStatuses.push(status);
+
+    if (status === 'completed' || status === 'failed') {
+      return { done: true, data, observedStatuses };
+    }
+
+    await delay(1500);
+  }
+
+  return { done: false, observedStatuses };
+}
+
+async function testAsyncFallback() {
+  const res = await fetch(`${BASE_URL}/1/tasks?forceAsync=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: { input: 'Return JSON with summary containing ASYNC_OK.' } }),
+  });
+
+  assert(res.status === 202, `Expected async fallback 202, received ${res.status}`);
+  const data = await res.json();
+  assert(data.id, 'Async response missing task id');
+  assert(data.status === 'running', 'Async response status was not running');
+
+  const result = await pollTask('1', data.id, { channel: 'tasks', timeoutMs: 120000 });
+  assert(result.done, 'Async task did not finish within timeout');
+  assert(result.data.status === 'completed', `Async task ended with ${result.data.status}`);
+  assert(
+    result.observedStatuses.includes('running') || result.observedStatuses.includes('submitted'),
+    `Async task never observed running/submitted status: ${result.observedStatuses.join(',')}`
+  );
+}
+
+async function testFailurePersistence() {
+  const res = await fetch(`${BASE_URL}/1/tasks?forceFailure=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: { input: 'Force failure test payload.' } }),
+  });
+
+  assert(res.status === 500, `Expected forced failure 500, received ${res.status}`);
+  const failed = await res.json();
+  assert(failed.id, 'Forced failure response missing task id');
+  assert(failed.status === 'failed', 'Forced failure response missing failed status');
+
+  const getRes = await fetch(`${BASE_URL}/1/tasks/${failed.id}`);
+  assert(getRes.ok, `GET failed task returned ${getRes.status}`);
+  const persisted = await getRes.json();
+  assert(persisted.status === 'failed', 'Persisted failed task status mismatch');
+  assert(persisted.error, 'Persisted failed task missing error message');
+}
+
+async function testA2AParity() {
+  const createRes = await fetch(`${BASE_URL}/1/a2a/tasks?forceAsync=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: { input: 'Return JSON with summary containing A2A_OK.' } }),
+  });
+
+  assert(createRes.status === 202, `Expected A2A async 202, received ${createRes.status}`);
+  const created = await createRes.json();
+  assert(created.id, 'A2A create response missing task id');
+
+  const polled = await pollTask('1', created.id, { channel: 'a2a', timeoutMs: 120000 });
+  assert(polled.done, 'A2A async task did not finish within timeout');
+  assert(polled.data.status === 'completed', `A2A task ended with ${polled.data.status}`);
+
+  const resultRes = await fetch(`${BASE_URL}/1/a2a/tasks/${created.id}/result`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      summary: 'Client result metadata update',
+      marker: 'A2A_RESULT_OK',
+    }),
+  });
+  assert(resultRes.ok, `A2A result update failed with ${resultRes.status}`);
+}
+
+async function triggerScheduledCleanup() {
+  const candidates = [
+    `${BASE_URL}/__scheduled`,
+    `${BASE_URL}/cdn-cgi/handler/scheduled`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'x-cron': '0 */6 * * *' },
+      });
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  throw new Error('Unable to trigger scheduled cleanup endpoint in local dev.');
+}
+
+async function testRetentionCleanup() {
+  const res = await fetch(`${BASE_URL}/1/tasks?forceFailure=true&forceExpired=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: { input: 'Create immediately expired task row.' } }),
+  });
+
+  assert(res.status === 500, `Expected forced failure for expired-row setup, received ${res.status}`);
+  const task = await res.json();
+  assert(task.id, 'Expired-row setup response missing id');
+
+  const before = await fetch(`${BASE_URL}/1/tasks/${task.id}`);
+  assert(before.ok, 'Expired-row task should exist before cleanup');
+
+  await triggerScheduledCleanup();
+  await delay(1000);
+
+  const after = await fetch(`${BASE_URL}/1/tasks/${task.id}`);
+  assert(after.status === 404, `Expired-row task should be deleted after cleanup, got ${after.status}`);
 }
 
 async function run() {
@@ -160,7 +353,9 @@ async function run() {
   let shutdown = async () => {};
 
   if (!REMOTE) {
-    wrangler = spawn('wrangler', ['dev', '--local', '--ip', '127.0.0.1', '--port', '8787'], {
+    runLocalMigrations();
+
+    wrangler = spawn('wrangler', ['dev', '--local', '--test-scheduled', '--ip', '127.0.0.1', '--port', '8787'], {
       cwd: EXAMPLEAGENTS_DIR,
       env: {
         ...process.env,
@@ -185,7 +380,14 @@ async function run() {
     const agentIds = await fetchAgentIds();
     await testHealth();
     await testAgentCards(agentIds);
+    await testFailurePersistence();
+    if (!REMOTE) {
+      await testRetentionCleanup();
+    }
     if (!SKIP_VENICE) {
+      await testPersistenceFastPath();
+      await testAsyncFallback();
+      await testA2AParity();
       await testVeniceResponse({ requireLocalKey: !REMOTE });
     }
     console.log('All tests passed.');
