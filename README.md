@@ -34,11 +34,10 @@ See each module's README for setup and usage.
 
 ## Flare Integration
 
-This project leverages **Flare's FAssets protocol** to enable cross-chain XRPL liquidity for agent task settlements. See [FLARE_INTEGRATION.md](./FLARE_INTEGRATION.md) for:
-- Technical architecture and FAssets usage
-- Firelight Vault integration for yield-bearing collateral
-- Developer experience feedback on building with Flare
-- Live deployment on Coston2 testnet
+This project leverages **Flare's FAssets protocol** to enable cross-chain XRPL liquidity for agent task settlements. See [contracts/script/flare/](./contracts/script/flare/) for:
+- **[contracts/script/flare/README.md](./contracts/script/flare/README.md)** - Quick start guide and script reference
+- **[contracts/script/flare/FLARE_INTEGRATION.md](./contracts/script/flare/FLARE_INTEGRATION.md)** - Technical architecture, developer feedback, and bounty qualification
+- **[contracts/script/flare/](./contracts/script/flare/)** - Deployment and testing scripts for Coston2
 
 **Key Innovation**: Agents stake yFXRP (yield-bearing FXRP vault shares) as collateral, earning 5-10% APY during task execution while maintaining trustless escrow security.
 
