@@ -7,6 +7,7 @@ const plasmaTestnet = defineChain({
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://testnet-rpc.plasma.to'] },
+    public: { http: ['https://testnet-rpc.plasma.to'] },
   },
   blockExplorers: {
     default: { name: 'Plasma Explorer', url: 'https://testnet-explorer.plasma.to' },

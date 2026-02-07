@@ -1,10 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TaskSearchBox } from '@/components/TaskSearchBox';
 import { AgentRoutesList } from '@/components/AgentRoutesList';
 import { useAgentMatching } from '@/hooks/useAgentMatching';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Settings, RefreshCw, ArrowDown } from 'lucide-react';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
@@ -25,9 +24,21 @@ export default function Home() {
   const { address } = useAccount();
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState('0.1');
+  const [paymentAmount, setPaymentAmount] = useState('0.00');
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
+
+  // Sync payment amount with selected agent's stake requirements
+  useEffect(() => {
+    if (selectedAgentId && agents) {
+      const selectedAgent = agents.find(a => a.agent.agentId === selectedAgentId);
+      if (selectedAgent?.agent.sla?.minAcceptanceStake) {
+        const minStake = formatEther(selectedAgent.agent.sla.minAcceptanceStake);
+        // We set the payment to be the same as the min stake for now, or a bit more
+        setPaymentAmount(minStake);
+      }
+    }
+  }, [selectedAgentId, agents]);
 
   // Fetch balance
   const { data: balance } = useReadContract({
@@ -135,26 +146,38 @@ export default function Home() {
               <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-1 flex flex-col justify-center">
                 <label className="text-[10px] font-bold text-muted-foreground mb-1 block uppercase tracking-widest">Estimated Cost</label>
                 <div className="flex justify-between items-end">
-                  <input 
-                    type="text" 
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full"
-                  />
+                  {selectedAgentId ? (
+                    <input 
+                      type="text" 
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full animate-in fade-in slide-in-from-left-2"
+                    />
+                  ) : (
+                    <div className="text-2xl font-bold text-white/20 tracking-tight h-[60px] flex items-center">
+                      Search & Select Agent...
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1 flex-none">
                       <Image 
-                        src="/ethereum-eth-logo.svg" 
-                        alt="Ethereum Logo" 
+                        src="/chain-light.svg" 
+                        alt="Network Logo" 
                         width={24} 
                         height={24} 
                         className="w-5 h-5 object-contain"
                       />
-                      <span className="font-bold text-base text-white">ETH</span>
+                      <span className="font-bold text-base text-white">XPL</span>
                   </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium">
-                  <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
-                  <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} TST</span>
+                <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
+                  {selectedAgentId ? (
+                    <>
+                      <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
+                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} TST</span>
+                    </>
+                  ) : (
+                    <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
+                  )}
                 </div>
               </div>
             </div>

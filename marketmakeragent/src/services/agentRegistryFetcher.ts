@@ -31,6 +31,11 @@ export class AgentRegistryFetcher {
 	private normalizeAgentCard(card: any, agentId: string): AgentCapabilityCard {
 		const skillTags = card.skills?.flatMap((skill: any) => skill.tags || []) || [];
 
+		// Calculate average stake from skills
+		const avgStake = card.skills?.length > 0
+			? card.skills.reduce((sum: number, skill: any) => sum + (skill.stake || 0), 0) / card.skills.length
+			: 0.001;
+
 		return {
 			agentId,
 			name: card.name || `Agent ${agentId}`,
@@ -40,7 +45,7 @@ export class AgentRegistryFetcher {
 			supportedDomains: Array.from(new Set(skillTags)),
 			maxConcurrentTasks: 5,
 			sla: {
-				minAcceptanceStake: '1000000000000000000',
+				minAcceptanceStake: (avgStake * 1e18).toString(),
 				avgCompletionTimeSeconds: 300,
 				maxCompletionTimeSeconds: 900,
 			},
