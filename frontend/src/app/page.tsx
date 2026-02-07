@@ -110,6 +110,26 @@ export default function Home() {
     },
   });
 
+  const { data: paymentTokenSymbolData } = useReadContract({
+    address: paymentTokenAddress as `0x${string}`,
+    abi: [
+      {
+        name: 'symbol',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }],
+      },
+    ],
+    functionName: 'symbol',
+    query: {
+      enabled: !!address,
+    },
+  });
+
+  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined)
+    || (isPlasmaChain ? 'TST' : 'FXRP');
+
   const refreshActiveTask = useCallback(async () => {
     if (!sdk || activeTaskId === null) return;
 
@@ -371,14 +391,14 @@ export default function Home() {
                         height={24}
                         className="w-5 h-5 object-contain"
                       />
-                      <span className="font-bold text-base text-white">FXRP</span>
+                      <span className="font-bold text-base text-white">{paymentTokenSymbol}</span>
                   </div>
                 </div>
                 <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
                   {selectedAgentId ? (
                     <>
                       <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
-                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} TST</span>
+                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} {paymentTokenSymbol}</span>
                     </>
                   ) : (
                     <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
@@ -388,6 +408,7 @@ export default function Home() {
                 {selectedAgentId && (
                   <TaskConfigForm
                     paymentAmount={paymentAmount}
+                    tokenSymbol={paymentTokenSymbol}
                     onDeadlineChange={setDeadline}
                   />
                 )}

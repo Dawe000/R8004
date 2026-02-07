@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { formatEther } from 'ethers';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
@@ -66,6 +66,23 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
   const [resultBody, setResultBody] = useState<unknown>(null);
   const [resultError, setResultError] = useState<string | null>(null);
+
+  const { data: paymentTokenSymbolData } = useReadContract({
+    address: task?.paymentToken as `0x${string}` | undefined,
+    abi: [
+      {
+        name: 'symbol',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }],
+      },
+    ],
+    functionName: 'symbol',
+    query: {
+      enabled: Boolean(task?.paymentToken),
+    },
+  });
 
   const fetchTask = useCallback(async () => {
     if (!sdk) return;
@@ -143,6 +160,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   if (!task) return null;
 
   const statusInfo = STATUS_MAP[task.status] || { label: 'Pending', color: 'text-gray-400', icon: Clock };
+  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
   const StatusIcon = statusInfo.icon;
   const normalizedAddress = address?.toLowerCase();
   const isTaskClient = Boolean(normalizedAddress && normalizedAddress === task.client.toLowerCase());
@@ -234,7 +252,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
       <div className="flex items-center gap-2">
         <div className="text-right">
-          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} TST</div>
+          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} {paymentTokenSymbol}</div>
         </div>
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -257,14 +275,14 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               <DataRow label="Client" value={task.client} />
               <DataRow label="Agent" value={task.agent} />
               <DataRow label="Payment Token" value={task.paymentToken} />
-              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} TST`} />
-              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} TST`} />
+              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} ${paymentTokenSymbol}`} />
               <DataRow label="Payment Deposited" value={paymentDeposited === null ? '-' : paymentDeposited ? 'Yes' : 'No'} />
               <DataRow label="Created At" value={formatTimestamp(task.createdAt)} />
               <DataRow label="Deadline" value={formatTimestamp(task.deadline)} />
               <DataRow label="Cooldown Ends" value={formatTimestamp(task.cooldownEndsAt)} />
-              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} TST`} />
-              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} TST`} />
+              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} ${paymentTokenSymbol}`} />
               <DataRow label="Result Hash" value={task.resultHash} />
               <DataRow label="Result URI" value={task.resultURI || '-'} />
               <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
