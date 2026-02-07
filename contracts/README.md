@@ -39,4 +39,10 @@ npm run deploy:sandbox
 **RPC:** https://testnet-rpc.plasma.to  
 **Explorer:** https://testnet.plasmascan.to
 
+**Run Path A flow on testnet:**
+```bash
+npm run testnet:flow
+```
+Runs createTask -> acceptTask -> depositPayment -> assertCompletion -> (3 min wait) -> settleNoContest. Add `PINATA_JWT` to `.env` for IPFS uploads when using spec/evidence objects.
+
 See `docs/TECHNICAL_SPEC.md` for interface definitions.

@@ -8,7 +8,10 @@
     "test:verbose": "VERBOSE=1 hardhat test",
     "deploy:sandbox": "hardhat run script/deploy-sandbox.ts",
     "deploy:plasma": "hardhat run script/deploy-plasma-testnet.ts --network plasma-testnet",
-    "print-addresses": "hardhat run script/print-testnet-addresses.ts"
+    "print-addresses": "hardhat run script/print-testnet-addresses.ts",
+    "testnet:flow": "hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-c": "FLOW_PATH=path-c hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-d": "FLOW_PATH=path-d hardhat run script/run-testnet-flow.ts"
   },
   "devDependencies": {
     "@erc8001/agent-task-sdk": "file:../sdk",
