@@ -15,8 +15,9 @@ const ESCROW_ABI: InterfaceAbi = [
   "function disputeBondBps() external view returns (uint256)",
   "function escalationBondBps() external view returns (uint256)",
   "function paymentDeposited(uint256 taskId) external view returns (bool)",
+  "function allowedTokens(address) external view returns (bool)",
   "function umaConfig() external view returns (tuple(address oracle, uint64 liveness, bytes32 identifier, uint256 minimumBond))",
-  "function createTask(string calldata descriptionURI, address paymentToken, uint256 paymentAmount, uint256 deadline) external returns (uint256 taskId)",
+  "function createTask(string calldata descriptionURI, address paymentToken, uint256 paymentAmount, uint256 deadline, address stakeToken) external returns (uint256 taskId)",
   "function acceptTask(uint256 taskId, uint256 stakeAmount) external",
   "function depositPayment(uint256 taskId) external",
   "function assertCompletion(uint256 taskId, bytes32 resultHash, bytes calldata agentSignature, string calldata resultURI) external",
@@ -26,7 +27,7 @@ const ESCROW_ABI: InterfaceAbi = [
   "function cannotComplete(uint256 taskId, string calldata reason) external",
   "function settleNoContest(uint256 taskId) external",
   "function settleAgentConceded(uint256 taskId) external",
-  "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, string resultURI, bytes32 umaAssertionId, bool umaResultTruth))",
+  "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, address stakeToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, string resultURI, bytes32 umaAssertionId, bool umaResultTruth))",
   "event TaskCreated(uint256 indexed taskId, address indexed client, string descriptionURI)",
   "event TaskAccepted(uint256 indexed taskId, address indexed agent, uint256 stake)",
   "event TaskDisputeEscalated(uint256 indexed taskId, address indexed agent, uint256 bond, string evidenceURI, bytes32 assertionId)",
@@ -46,6 +47,16 @@ export function getEscrowContract(
   return new Contract(address, ESCROW_ABI, signerOrProvider);
 }
 
+/** Check whether a token is in the escrow's allowed (whitelist) set. Provider-only. */
+export async function getTokenAllowed(
+  escrowAddress: string,
+  provider: Provider,
+  tokenAddress: string
+): Promise<boolean> {
+  const escrow = getEscrowContract(escrowAddress, provider);
+  return escrow.allowedTokens(tokenAddress);
+}
+
 /** ERC20 contract wrapper */
 export function getErc20Contract(
   address: string,
@@ -60,6 +71,7 @@ export function parseTask(raw: {
   client: string;
   agent: string;
   paymentToken: string;
+  stakeToken: string;
   paymentAmount: bigint;
   agentStake: bigint;
   createdAt: bigint;
@@ -81,6 +93,7 @@ export function parseTask(raw: {
     client: raw.client,
     agent: raw.agent,
     paymentToken: raw.paymentToken,
+    stakeToken: raw.stakeToken,
     paymentAmount: raw.paymentAmount,
     agentStake: raw.agentStake,
     createdAt: raw.createdAt,

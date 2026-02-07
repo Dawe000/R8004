@@ -17,7 +17,8 @@ describe("AgentTaskEscrow - Path B (Dispute, UMA Resolution)", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
 
     await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount + ethers.parseEther("1000"));
@@ -68,7 +69,8 @@ describe("AgentTaskEscrow - Path B (Dispute, UMA Resolution)", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
 
     await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount + ethers.parseEther("1000"));

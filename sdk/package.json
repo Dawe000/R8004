@@ -15,10 +15,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathIgnorePatterns=integration.test --testPathIgnorePatterns=live.test",
-    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js integration.test",
-    "test:live": "SDK_LIVE_TESTNET=1 node --experimental-vm-modules node_modules/jest/bin/jest.js live.test",
-    "test:live:flow": "SDK_LIVE_TESTNET=1 SDK_LIVE_RUN_FLOW=path-c,path-d node --experimental-vm-modules node_modules/jest/bin/jest.js live.test",
+    "test": "jest --testPathIgnorePatterns=integration.test --testPathIgnorePatterns=live.test",
+    "test:integration": "jest integration.test",
+    "test:live": "SDK_LIVE_TESTNET=1 jest live.test",
+    "test:live:flow": "SDK_LIVE_TESTNET=1 SDK_LIVE_RUN_FLOW=path-c,path-d jest live.test",
     "test:ipfs:live": "npx tsx script/test-ipfs-live.ts",
     "typecheck": "tsc --noEmit"
   },

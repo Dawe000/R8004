@@ -10,10 +10,11 @@ import { Clock, ShieldAlert, Coins } from 'lucide-react';
 
 interface TaskConfigFormProps {
   paymentAmount: string;
+  tokenSymbol: string;
   onDeadlineChange: (deadline: number) => void;
 }
 
-export function TaskConfigForm({ paymentAmount, onDeadlineChange }: TaskConfigFormProps) {
+export function TaskConfigForm({ paymentAmount, tokenSymbol, onDeadlineChange }: TaskConfigFormProps) {
   const [duration, setDuration] = useState(24); // Default 24 hours
   const [disputeBond, setDisputeBond] = useState('0');
 
@@ -60,14 +61,14 @@ export function TaskConfigForm({ paymentAmount, onDeadlineChange }: TaskConfigFo
         </div>
         <div className="flex justify-between text-[11px] text-muted-foreground">
           <span>Required Bond to Dispute:</span>
-          <span className="font-mono text-white">{disputeBond} XPL</span>
+          <span className="font-mono text-white">{disputeBond} {tokenSymbol}</span>
         </div>
         <div className="flex justify-between text-[11px] text-muted-foreground">
           <span>Agent Stake at Risk:</span>
-          <span className="font-mono text-white">{paymentAmount} XPL</span>
+          <span className="font-mono text-white">{paymentAmount} {tokenSymbol}</span>
         </div>
         <p className="text-[9px] text-muted-foreground/60 leading-tight pt-1">
-          *If the agent fails or cheats, you can dispute the result. A bond of {disputeBond} XPL is required to prevent spam disputes, returned if you win.
+          *If the agent fails or cheats, you can dispute the result. A bond of {disputeBond} {tokenSymbol} is required to prevent spam disputes, returned if you win.
         </p>
       </div>
 

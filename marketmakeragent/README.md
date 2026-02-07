@@ -44,6 +44,7 @@ Cloudflare Worker that matches client task queries to suitable agents using Veni
 - **Trust Scoring**: Evaluates agents based on stake requirements and SLA metrics
 - **Ranked Results**: Returns top 5 agents with match scores and reasoning
 - **Dynamic Agent Discovery**: Fetches available agent IDs/cards from the agents worker
+- **Matching-only scope**: Does not proxy ERC8001 execution dispatch/payment alerts
 
 ## API Endpoints
 

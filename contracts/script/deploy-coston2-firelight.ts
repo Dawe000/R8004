@@ -32,7 +32,8 @@ async function main() {
     await mockOOv3.getAddress(),
     7200, // 2hr UMA liveness
     ethers.keccak256(ethers.toUtf8Bytes("AGENT_TASK_V1")),
-    ethers.parseEther("10") // 10 FXRP min UMA bond
+    ethers.parseEther("10"), // 10 FXRP min UMA bond
+    [fxrpAddress] // Allowed tokens: FTestXRP
   );
   await escrow.waitForDeployment();
   console.log("✓ AgentTaskEscrow:", await escrow.getAddress());

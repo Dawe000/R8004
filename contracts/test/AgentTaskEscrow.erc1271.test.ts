@@ -25,7 +25,8 @@ describe("AgentTaskEscrow - ERC-1271 Smart Wallet", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
 
     logStep("acceptTask via mock wallet", { taskId: 0 });

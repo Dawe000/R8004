@@ -40,11 +40,21 @@ export class AgentSDK {
     return escrow.paymentDeposited(taskId);
   }
 
-  /** Accept task with stake - approves token if needed */
+  /** Check whether a token is in the escrow's allowed (whitelist) set for payments and staking */
+  async isTokenAllowed(tokenAddress: string): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.allowedTokens(tokenAddress);
+  }
+
+  /** Accept task with stake - approves stake token if needed (stakeToken or paymentToken) */
   async acceptTask(taskId: bigint, stakeAmount: bigint): Promise<void> {
     const task = await this.getTask(taskId);
+    const stakeTokenAddr =
+      task.stakeToken && task.stakeToken !== "0x0000000000000000000000000000000000000000"
+        ? task.stakeToken
+        : task.paymentToken;
     await ensureAllowance(
-      task.paymentToken,
+      stakeTokenAddr,
       this.signer,
       this.config.escrowAddress,
       stakeAmount

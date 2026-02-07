@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { formatEther } from 'ethers';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
+import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
+import { getTaskDispatchMeta } from '@/lib/taskMeta';
 import {
   Dialog,
   DialogContent,
@@ -61,8 +63,26 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
+  const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
   const [resultBody, setResultBody] = useState<unknown>(null);
   const [resultError, setResultError] = useState<string | null>(null);
+
+  const { data: paymentTokenSymbolData } = useReadContract({
+    address: task?.paymentToken as `0x${string}` | undefined,
+    abi: [
+      {
+        name: 'symbol',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }],
+      },
+    ],
+    functionName: 'symbol',
+    query: {
+      enabled: Boolean(task?.paymentToken),
+    },
+  });
 
   const fetchTask = useCallback(async () => {
     if (!sdk) return;
@@ -140,11 +160,17 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   if (!task) return null;
 
   const statusInfo = STATUS_MAP[task.status] || { label: 'Pending', color: 'text-gray-400', icon: Clock };
+  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
   const StatusIcon = statusInfo.icon;
-  const isTaskClient = Boolean(address) && address.toLowerCase() === task.client.toLowerCase();
+  const normalizedAddress = address?.toLowerCase();
+  const isTaskClient = Boolean(normalizedAddress && normalizedAddress === task.client.toLowerCase());
   const canDepositHere =
     task.status === TaskStatus.Accepted &&
     paymentDeposited === false &&
+    isTaskClient;
+  const canNotifyHere =
+    task.status === TaskStatus.Accepted &&
+    paymentDeposited === true &&
     isTaskClient;
 
   const depositDisabledReason = !isTaskClient
@@ -154,6 +180,36 @@ export function TaskActivity({ taskId }: { taskId: string }) {
       : paymentDeposited
         ? 'Payment already deposited.'
         : 'Checking payment status...';
+  const notifyDisabledReason = !isTaskClient
+    ? 'Connect with the task client wallet to notify.'
+    : task.status !== TaskStatus.Accepted
+      ? 'Notify is only available while task is Accepted.'
+      : paymentDeposited
+        ? null
+        : 'Deposit payment before notifying the agent.';
+
+  const handleNotifyPaymentDeposited = async () => {
+    const dispatchMeta = getTaskDispatchMeta(task.id.toString());
+    if (!dispatchMeta?.agentId) {
+      toast.warning('Payment deposited, but agent notification unavailable for this historical task.');
+      return;
+    }
+
+    setIsNotifyingPayment(true);
+    const notifyToastId = toast.loading('Notifying agent that payment was deposited...');
+    try {
+      await notifyErc8001PaymentDepositedDirect({
+        agentId: dispatchMeta.agentId,
+        onchainTaskId: task.id.toString(),
+      });
+      toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
+    } catch (notifyError: unknown) {
+      const notifyMessage = notifyError instanceof Error ? notifyError.message : 'Unknown error';
+      toast.error(`Payment deposited, but notify failed: ${notifyMessage}`, { id: notifyToastId });
+    } finally {
+      setIsNotifyingPayment(false);
+    }
+  };
 
   const handleDepositPayment = async () => {
     if (!sdk) {
@@ -166,8 +222,9 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     const toastId = toast.loading(`Depositing payment for task ${task.id.toString()}...`);
     try {
       await sdk.client.depositPayment(task.id);
-      toast.success('Payment deposited. Agent can now execute and assert completion.', { id: toastId });
+      toast.success('Payment deposited on-chain.', { id: toastId });
       await fetchTask();
+      await handleNotifyPaymentDeposited();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       toast.error(`Deposit failed: ${message}`, { id: toastId });
@@ -195,7 +252,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
       <div className="flex items-center gap-2">
         <div className="text-right">
-          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} TST</div>
+          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} {paymentTokenSymbol}</div>
         </div>
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -218,14 +275,14 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               <DataRow label="Client" value={task.client} />
               <DataRow label="Agent" value={task.agent} />
               <DataRow label="Payment Token" value={task.paymentToken} />
-              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} TST`} />
-              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} TST`} />
+              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} ${paymentTokenSymbol}`} />
               <DataRow label="Payment Deposited" value={paymentDeposited === null ? '-' : paymentDeposited ? 'Yes' : 'No'} />
               <DataRow label="Created At" value={formatTimestamp(task.createdAt)} />
               <DataRow label="Deadline" value={formatTimestamp(task.deadline)} />
               <DataRow label="Cooldown Ends" value={formatTimestamp(task.cooldownEndsAt)} />
-              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} TST`} />
-              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} TST`} />
+              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} ${paymentTokenSymbol}`} />
               <DataRow label="Result Hash" value={task.resultHash} />
               <DataRow label="Result URI" value={task.resultURI || '-'} />
               <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
@@ -244,6 +301,16 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               </button>
               {!canDepositHere && depositDisabledReason && (
                 <p className="text-[10px] text-emerald-200/80">{depositDisabledReason}</p>
+              )}
+              <button
+                onClick={handleNotifyPaymentDeposited}
+                disabled={!canNotifyHere || isNotifyingPayment}
+                className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isNotifyingPayment ? 'Notifying Agent...' : 'Notify Agent Payment Deposited'}
+              </button>
+              {!canNotifyHere && notifyDisabledReason && (
+                <p className="text-[10px] text-emerald-200/80">{notifyDisabledReason}</p>
               )}
             </div>
 

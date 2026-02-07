@@ -20,11 +20,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
-import { MOCK_TOKEN_ADDRESS } from '@/config/constants';
-import { dispatchErc8001Task } from '@/lib/api/marketMaker';
+import {
+  createTaskSpecUri,
+  dispatchErc8001TaskDirect,
+  notifyErc8001PaymentDepositedDirect,
+} from '@/lib/api/agents';
+import { getTaskDispatchMeta, upsertTaskDispatchMeta } from '@/lib/taskMeta';
 import { formatEther, parseEther } from 'ethers';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { TaskStatus, type Task } from '@sdk/types';
+import {
+  COSTON2_FIRELIGHT_DEFAULTS,
+  ONCHAIN_TASK_SPEC_V1,
+  PLASMA_TESTNET_DEFAULTS,
+} from '@sdk/index';
 import { toast } from 'sonner';
 
 const TASK_STATUS_LABELS: Record<number, string> = {
@@ -47,12 +56,14 @@ const TERMINAL_STATUSES = new Set<number>([
 
 export default function Home() {
   const { address } = useAccount();
+  const chainId = useChainId();
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('0.00');
   const [deadline, setDeadline] = useState(Math.floor(Date.now() / 1000) + 3600);
   const [isCreating, setIsCreating] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
+  const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
 
   const [activeTaskId, setActiveTaskId] = useState<bigint | null>(null);
   const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
@@ -65,6 +76,10 @@ export default function Home() {
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
   const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
+  const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
+  const paymentTokenAddress = isPlasmaChain
+    ? PLASMA_TESTNET_DEFAULTS.mockTokenAddress
+    : COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress;
 
   const selectedAgent = useMemo(() => {
     if (!selectedAgentId || !agents) return null;
@@ -78,7 +93,7 @@ export default function Home() {
   }, [selectedAgent]);
 
   const { data: balance } = useReadContract({
-    address: MOCK_TOKEN_ADDRESS as `0x${string}`,
+    address: paymentTokenAddress as `0x${string}`,
     abi: [
       {
         name: 'balanceOf',
@@ -94,6 +109,26 @@ export default function Home() {
       enabled: !!address,
     },
   });
+
+  const { data: paymentTokenSymbolData } = useReadContract({
+    address: paymentTokenAddress as `0x${string}`,
+    abi: [
+      {
+        name: 'symbol',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'string' }],
+      },
+    ],
+    functionName: 'symbol',
+    query: {
+      enabled: !!address,
+    },
+  });
+
+  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined)
+    || (isPlasmaChain ? 'TST' : 'FXRP');
 
   const refreshActiveTask = useCallback(async () => {
     if (!sdk || activeTaskId === null) return;
@@ -161,25 +196,38 @@ export default function Home() {
     const toastId = toast.loading('Creating task intent on-chain...');
 
     try {
+      if (!isPlasmaChain) {
+        throw new Error(
+          `Direct agent execution currently supports Plasma only. Switch wallet network to Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}).`
+        );
+      }
+
       if (!selectedAgent.agent.sla?.minAcceptanceStake) {
         throw new Error('Selected agent is missing minAcceptanceStake');
       }
 
       const amount = parseEther(paymentAmount);
 
+      const taskSpecUri = await createTaskSpecUri({
+        version: ONCHAIN_TASK_SPEC_V1,
+        input: query.trim(),
+        ...(selectedAgent.agent.skills?.[0]?.id ? { skill: selectedAgent.agent.skills[0].id } : {}),
+        ...(address ? { client: address } : {}),
+        createdAt: new Date().toISOString(),
+      });
+
       const taskId = await sdk.client.createTask(
-        query,
-        MOCK_TOKEN_ADDRESS,
+        taskSpecUri,
+        paymentTokenAddress,
         amount,
         deadline
       );
 
-      toast.loading('Dispatching to selected agent via marketmaker...', { id: toastId });
+      toast.loading('Dispatching task directly to selected agent...', { id: toastId });
 
-      const dispatchResult = await dispatchErc8001Task({
+      const dispatchResult = await dispatchErc8001TaskDirect({
         agentId: selectedAgent.agent.agentId,
         onchainTaskId: taskId.toString(),
-        input: query,
         stakeAmountWei: selectedAgent.agent.sla.minAcceptanceStake,
         skill: selectedAgent.agent.skills?.[0]?.id,
       });
@@ -195,6 +243,10 @@ export default function Home() {
       if (typeof window !== 'undefined') {
         const savedTasks = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
         localStorage.setItem('r8004_tasks', JSON.stringify([...savedTasks, taskId.toString()]));
+        upsertTaskDispatchMeta(taskId.toString(), {
+          agentId: dispatchResult.agentId,
+          runId: dispatchResult.runId,
+        });
       }
 
       toast.success(
@@ -209,6 +261,32 @@ export default function Home() {
     }
   };
 
+  const handleNotifyPaymentDeposited = useCallback(
+    async (taskId: bigint) => {
+      const dispatchMeta = getTaskDispatchMeta(taskId.toString());
+      if (!dispatchMeta?.agentId) {
+        toast.warning('Payment deposited, but agent notification metadata is missing for this task.');
+        return;
+      }
+
+      setIsNotifyingPayment(true);
+      const notifyToastId = toast.loading('Notifying agent that payment was deposited...');
+      try {
+        await notifyErc8001PaymentDepositedDirect({
+          agentId: dispatchMeta.agentId,
+          onchainTaskId: taskId.toString(),
+        });
+        toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
+      } catch (notifyErr: unknown) {
+        const notifyMessage = notifyErr instanceof Error ? notifyErr.message : 'Unknown error';
+        toast.error(`Payment deposited, but notify failed: ${notifyMessage}`, { id: notifyToastId });
+      } finally {
+        setIsNotifyingPayment(false);
+      }
+    },
+    []
+  );
+
   const handleDepositPayment = async () => {
     if (!sdk || activeTaskId === null) return;
 
@@ -219,7 +297,9 @@ export default function Home() {
       await sdk.client.depositPayment(activeTaskId);
       setPaymentDeposited(true);
       await refreshActiveTask();
-      toast.success('Payment deposited. Agent can now execute and assert completion.', { id: toastId });
+      toast.success('Payment deposited on-chain.', { id: toastId });
+
+      await handleNotifyPaymentDeposited(activeTaskId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       toast.error(`Deposit failed: ${message}`, { id: toastId });
@@ -311,14 +391,14 @@ export default function Home() {
                         height={24}
                         className="w-5 h-5 object-contain"
                       />
-                      <span className="font-bold text-base text-white">FXRP</span>
+                      <span className="font-bold text-base text-white">{paymentTokenSymbol}</span>
                   </div>
                 </div>
                 <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
                   {selectedAgentId ? (
                     <>
                       <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
-                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} TST</span>
+                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} {paymentTokenSymbol}</span>
                     </>
                   ) : (
                     <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
@@ -328,6 +408,7 @@ export default function Home() {
                 {selectedAgentId && (
                   <TaskConfigForm
                     paymentAmount={paymentAmount}
+                    tokenSymbol={paymentTokenSymbol}
                     onDeadlineChange={setDeadline}
                   />
                 )}
@@ -422,6 +503,16 @@ export default function Home() {
                   className="w-full py-3 font-bold text-sm rounded-2xl transition-all bg-emerald-500 hover:bg-emerald-400 text-black"
                 >
                   {isDepositing ? 'Depositing Payment...' : 'Deposit Payment (Manual Step)'}
+                </button>
+              )}
+
+              {activeTaskId !== null && activeTaskStatus === TaskStatus.Accepted && paymentDeposited && (
+                <button
+                  onClick={() => void handleNotifyPaymentDeposited(activeTaskId)}
+                  disabled={isNotifyingPayment}
+                  className="w-full py-3 font-bold text-sm rounded-2xl transition-all bg-cyan-400 hover:bg-cyan-300 text-black"
+                >
+                  {isNotifyingPayment ? 'Notifying Agent...' : 'Notify Agent Payment Deposited'}
                 </button>
               )}
 

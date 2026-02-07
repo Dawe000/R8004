@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -12,7 +13,7 @@ import "./interfaces/IAgentTaskEscrow.sol";
  * @title AgentTaskEscrow
  * @notice ERC8001 Agent Task System - escrow for agent tasks with UMA dispute resolution
  */
-contract AgentTaskEscrow is IAgentTaskEscrow {
+contract AgentTaskEscrow is IAgentTaskEscrow, Ownable {
     using SafeERC20 for IERC20;
 
     struct OOv3Config {
@@ -34,6 +35,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     uint256 public escalationBondBps;
 
     OOv3Config public umaConfig;
+    mapping(address => bool) public allowedTokens;
 
     error TaskNotFound(uint256 taskId);
     error TaskAlreadyAccepted(uint256 taskId);
@@ -48,6 +50,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     error InvalidSignature(address expected, address recovered);
     error InvalidResultHash(bytes32 expected, bytes32 provided);
     error InvalidCaller();
+    error TokenNotAllowed(address token);
 
     constructor(
         address _marketMaker,
@@ -59,8 +62,9 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         address _umaOracle,
         uint64 _umaLiveness,
         bytes32 _umaIdentifier,
-        uint256 _umaMinimumBond
-    ) {
+        uint256 _umaMinimumBond,
+        address[] memory _allowedTokens
+    ) Ownable(msg.sender) {
         marketMaker = _marketMaker;
         marketMakerFeeBps = _marketMakerFeeBps;
         cooldownPeriod = _cooldownPeriod;
@@ -68,20 +72,28 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         disputeBondBps = _disputeBondBps;
         escalationBondBps = _escalationBondBps;
         umaConfig = OOv3Config(_umaOracle, _umaLiveness, _umaIdentifier, _umaMinimumBond);
+        for (uint256 i = 0; i < _allowedTokens.length; i++) {
+            allowedTokens[_allowedTokens[i]] = true;
+        }
     }
 
     function createTask(
         string calldata descriptionURI,
         address paymentToken,
         uint256 paymentAmount,
-        uint256 deadline
+        uint256 deadline,
+        address stakeToken
     ) external returns (uint256 taskId) {
+        if (!allowedTokens[paymentToken]) revert TokenNotAllowed(paymentToken);
+        if (stakeToken != address(0) && !allowedTokens[stakeToken]) revert TokenNotAllowed(stakeToken);
+
         taskId = nextTaskId++;
         tasks[taskId] = Task({
             id: taskId,
             client: msg.sender,
             agent: address(0),
             paymentToken: paymentToken,
+            stakeToken: stakeToken,
             paymentAmount: paymentAmount,
             agentStake: 0,
             createdAt: block.timestamp,
@@ -108,7 +120,8 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         t.agent = msg.sender;
         t.agentStake = stakeAmount;
         t.status = TaskStatus.Accepted;
-        IERC20(t.paymentToken).safeTransferFrom(msg.sender, address(this), stakeAmount);
+        address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+        IERC20(stakeTokenAddr).safeTransferFrom(msg.sender, address(this), stakeAmount);
         emit TaskAccepted(taskId, msg.sender, stakeAmount);
     }
 
@@ -210,7 +223,8 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
             IERC20(t.paymentToken).safeTransfer(t.client, t.paymentAmount);
         }
         if (t.agentStake > 0) {
-            IERC20(t.paymentToken).safeTransfer(t.client, t.agentStake);
+            address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+            IERC20(stakeTokenAddr).safeTransfer(t.client, t.agentStake);
         }
         emit TaskTimeoutCancelled(taskId);
     }
@@ -221,7 +235,8 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         if (msg.sender != t.agent) revert NotTaskAgent(taskId, msg.sender);
 
         t.status = TaskStatus.AgentFailed;
-        IERC20(t.paymentToken).safeTransfer(t.agent, t.agentStake);
+        address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+        IERC20(stakeTokenAddr).safeTransfer(t.agent, t.agentStake);
         if (paymentDeposited[taskId]) {
             IERC20(t.paymentToken).safeTransfer(t.client, t.paymentAmount);
         }
@@ -266,6 +281,16 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         return tasks[taskId];
     }
 
+    /** Add a token to the allowed (whitelist) set. Only owner. */
+    function addAllowedToken(address token) external onlyOwner {
+        allowedTokens[token] = true;
+    }
+
+    /** Remove a token from the allowed set. Only owner. */
+    function removeAllowedToken(address token) external onlyOwner {
+        allowedTokens[token] = false;
+    }
+
     mapping(bytes32 => uint256) private _assertionToTask;
 
     function _encodeClaim(
@@ -305,32 +330,47 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     function _settleHappyPath(uint256 taskId) internal {
         Task storage t = tasks[taskId];
         uint256 fee = (t.paymentAmount * marketMakerFeeBps) / 10000;
-        uint256 agentPayout = t.paymentAmount - fee + t.agentStake;
+        uint256 agentPaymentPayout = t.paymentAmount - fee;
 
-        IERC20(t.paymentToken).safeTransfer(t.agent, agentPayout);
+        IERC20(t.paymentToken).safeTransfer(t.agent, agentPaymentPayout);
         if (fee > 0 && marketMaker != address(0)) {
             IERC20(t.paymentToken).safeTransfer(marketMaker, fee);
+        }
+        if (t.agentStake > 0) {
+            address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+            IERC20(stakeTokenAddr).safeTransfer(t.agent, t.agentStake);
         }
     }
 
     function _settleClientWins(uint256 taskId) internal {
         Task storage t = tasks[taskId];
         IERC20(t.paymentToken).safeTransfer(t.client, t.paymentAmount + t.clientDisputeBond);
-        IERC20(t.paymentToken).safeTransfer(t.client, t.agentStake);
+        if (t.agentStake > 0) {
+            address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+            IERC20(stakeTokenAddr).safeTransfer(t.client, t.agentStake);
+        }
     }
 
     function _settleEscalatedTask(uint256 taskId, bool agentWon) internal {
         Task storage t = tasks[taskId];
         if (agentWon) {
             uint256 fee = (t.paymentAmount * marketMakerFeeBps) / 10000;
-            uint256 agentPayout = t.paymentAmount - fee + t.agentStake + t.agentEscalationBond + t.clientDisputeBond;
-            IERC20(t.paymentToken).safeTransfer(t.agent, agentPayout);
+            uint256 agentPaymentPayout = t.paymentAmount - fee + t.agentEscalationBond + t.clientDisputeBond;
+            IERC20(t.paymentToken).safeTransfer(t.agent, agentPaymentPayout);
             if (fee > 0 && marketMaker != address(0)) {
                 IERC20(t.paymentToken).safeTransfer(marketMaker, fee);
             }
+            if (t.agentStake > 0) {
+                address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+                IERC20(stakeTokenAddr).safeTransfer(t.agent, t.agentStake);
+            }
         } else {
-            uint256 clientPayout = t.paymentAmount + t.clientDisputeBond + t.agentStake + t.agentEscalationBond;
-            IERC20(t.paymentToken).safeTransfer(t.client, clientPayout);
+            uint256 clientPaymentPayout = t.paymentAmount + t.clientDisputeBond + t.agentEscalationBond;
+            IERC20(t.paymentToken).safeTransfer(t.client, clientPaymentPayout);
+            if (t.agentStake > 0) {
+                address stakeTokenAddr = t.stakeToken != address(0) ? t.stakeToken : t.paymentToken;
+                IERC20(stakeTokenAddr).safeTransfer(t.client, t.agentStake);
+            }
         }
     }
 }

@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useChainId } from 'wagmi';
-import { getEscrowConfig } from '@sdk/index';
-import { ESCROW_ADDRESS } from '@/config/constants';
+import {
+  COSTON2_FIRELIGHT_DEFAULTS,
+  getEscrowConfig,
+  PLASMA_TESTNET_DEFAULTS,
+} from '@sdk/index';
 import { useEthersProvider } from '@/lib/ethers';
 
 interface EscrowTimingState {
@@ -16,6 +19,9 @@ interface EscrowTimingState {
 export function useEscrowTiming() {
   const chainId = useChainId();
   const provider = useEthersProvider({ chainId });
+  const escrowAddress = chainId === PLASMA_TESTNET_DEFAULTS.chainId
+    ? PLASMA_TESTNET_DEFAULTS.escrowAddress
+    : COSTON2_FIRELIGHT_DEFAULTS.escrowAddress;
   const [state, setState] = useState<EscrowTimingState>({
     agentResponseWindowSec: null,
     disputeBondBps: null,
@@ -32,7 +38,7 @@ export function useEscrowTiming() {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const config = await getEscrowConfig(ESCROW_ADDRESS, provider);
+      const config = await getEscrowConfig(escrowAddress, provider);
       setState({
         agentResponseWindowSec: config.agentResponseWindow,
         disputeBondBps: config.disputeBondBps,
@@ -46,7 +52,7 @@ export function useEscrowTiming() {
         error: error instanceof Error ? error.message : 'Failed to load escrow timing',
       }));
     }
-  }, [provider]);
+  }, [provider, escrowAddress]);
 
   useEffect(() => {
     void refresh();

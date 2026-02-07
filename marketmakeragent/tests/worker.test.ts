@@ -252,55 +252,33 @@ test('POST /api/match-agents returns 500 when Pinecone query fails', async () =>
 	}
 });
 
-test('POST /api/agents/:id/erc8001/dispatch proxies task to agent worker', async () => {
-	const restoreFetch = installFetchMock(async (url, init) => {
-		const asString = url.toString();
-		if (asString === 'https://agents.local/1/tasks?forceAsync=true') {
-			assert.equal(init?.method, 'POST');
-			const payload = JSON.parse((init?.body as string) || '{}') as {
-				task?: { input?: string };
-				erc8001?: { taskId?: string; stakeAmountWei?: string };
-			};
-			assert.equal(payload.task?.input, 'summarize this');
-			assert.equal(payload.erc8001?.taskId, '42');
-			assert.equal(payload.erc8001?.stakeAmountWei, '1000');
-			return jsonResponse({
-				id: 'run-123',
-				status: 'running',
-				statusUrl: '/1/tasks/run-123',
-			});
-		}
-
-		return new Response(`No mock configured for ${asString}`, { status: 404 });
-	});
-
-	try {
-		const response = await worker.fetch(
-			new Request('http://localhost/api/agents/1/erc8001/dispatch', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					onchainTaskId: '42',
-					input: 'summarize this',
-					stakeAmountWei: '1000',
-				}),
+test('POST /api/agents/:id/erc8001/dispatch returns 404 (execution proxy removed)', async () => {
+	const response = await worker.fetch(
+		new Request('http://localhost/api/agents/1/erc8001/dispatch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				onchainTaskId: '42',
+				stakeAmountWei: '1000',
 			}),
-			createEnv(),
-			executionContext
-		);
+		}),
+		createEnv(),
+		executionContext
+	);
 
-		assert.equal(response.status, 200);
-		const payload = (await response.json()) as {
-			agentId: string;
-			runId: string;
-			status: string;
-			onchainTaskId: string;
-		};
-		assert.equal(payload.agentId, '1');
-		assert.equal(payload.runId, 'run-123');
-		assert.equal(payload.status, 'accepted');
-		assert.equal(payload.onchainTaskId, '42');
-	} finally {
-		restoreFetch();
-	}
+	assert.equal(response.status, 404);
+});
+
+test('POST /api/agents/:id/erc8001/payment-deposited returns 404 (execution proxy removed)', async () => {
+	const response = await worker.fetch(
+		new Request('http://localhost/api/agents/1/erc8001/payment-deposited', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ onchainTaskId: '42' }),
+		}),
+		createEnv(),
+		executionContext
+	);
+
+	assert.equal(response.status, 404);
 });

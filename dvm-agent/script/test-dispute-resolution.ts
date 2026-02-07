@@ -3,11 +3,34 @@
  * Run: npx tsx script/test-dispute-resolution.ts  (loads .dev.vars)
  * Or: VENICE_API_KEY=... npx tsx script/test-dispute-resolution.ts
  */
-import { config } from "dotenv";
 import { resolve } from "path";
+import { existsSync, readFileSync } from "fs";
 
-config({ path: resolve(process.cwd(), ".dev.vars") });
 import { VeniceDisputeService } from "../src/services/veniceDispute";
+
+function loadDevVars(filePath: string): void {
+  if (!existsSync(filePath)) {
+    return;
+  }
+  const raw = readFileSync(filePath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const idx = trimmed.indexOf("=");
+    if (idx < 0) {
+      continue;
+    }
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, "");
+    if (!(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+}
+
+loadDevVars(resolve(process.cwd(), ".dev.vars"));
 
 const EXAMPLES = [
   {
@@ -42,9 +65,9 @@ const EXAMPLES = [
 async function main() {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey?.trim()) {
-    console.error("Set VENICE_API_KEY in .dev.vars or env. Example:");
-    console.error("  VENICE_API_KEY=... npx tsx script/test-dispute-resolution.ts");
-    process.exit(1);
+    console.log("Skipping dispute test: VENICE_API_KEY is not set.");
+    console.log("Set VENICE_API_KEY in .dev.vars or env to run live dispute checks.");
+    return;
   }
 
   const venice = new VeniceDisputeService(apiKey);
