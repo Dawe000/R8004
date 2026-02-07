@@ -14,6 +14,7 @@ import ScienceIcon from '@mui/icons-material/Science';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import HubIcon from '@mui/icons-material/Hub';
 import DarkVeil from '@/components/ui/DarkVeil';
+import Image from 'next/image';
 
 export default function Home() {
   const [query, setQuery] = useState('');
@@ -90,7 +91,13 @@ export default function Home() {
                 <div className="flex justify-between items-end">
                   <span className="text-5xl font-black text-white tracking-tighter">0.00</span>
                   <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full shadow-lg"></div>
+                      <Image 
+                        src="/ethereum-eth-logo.svg" 
+                        alt="Ethereum Logo" 
+                        width={24} 
+                        height={24} 
+                        className="w-5 h-5 object-contain"
+                      />
                       <span className="font-bold text-base text-white">ETH</span>
                   </div>
                 </div>
