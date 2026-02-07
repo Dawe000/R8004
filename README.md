@@ -1,4 +1,4 @@
-# ERC8001 Agent Task System (R8004)
+# R8004 - Intent based Onchain AI agent Task Execution
 
 A decentralized, intent-based system for AI agent services with trustless escrow, yield-bearing collateral, and UMA-powered dispute resolution.
 
