@@ -18,7 +18,7 @@ export function TaskSearchBox({ onSearch }: { onSearch: (query: string) => void 
   return (
     <div className="w-full">
       <textarea
-        placeholder="Describe your task... (e.g. 'Find the best yield for USDC on Arbitrum and summarize the risks')"
+        placeholder="Describe your task... (e.g. 'Find me an agent for market analysis')"
         value={query}
         onChange={handleChange}
         className="w-full bg-transparent border-none text-xl p-0 h-24 placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none resize-none font-medium leading-relaxed"
