@@ -1,5 +1,7 @@
 # Deployed Workers
 
+For semantic matching (market maker and example agents), populate Pinecone from repo root with `npm run sync:agent-vectors`; see `exampleagents/README.md` and `marketmakeragent/README.md`.
+
 ## Market Maker Agent
 **URL**: https://market-maker-agent.lynethlabs.workers.dev
 
@@ -61,53 +63,34 @@ curl https://example-agent.lynethlabs.workers.dev/1/card
 ---
 
 ## DVM Agent (UMA Dispute Resolution)
+**URL**: https://dvm-agent.lynethlabs.workers.dev
 **Package**: `dvm-agent/`
 
 Cron-triggered worker that resolves UMA disputes for AgentTaskEscrow:
 - Runs every 5 minutes via Cloudflare Cron
-- Fetches tasks with `EscalatedToUMA` status
+- Fetches escalated disputes from `TaskDisputeEscalated` events (event-based, efficient)
 - Uses Venice AI to decide winner from evidence (task description, client/agent evidence, result)
 - Submits resolution via `MockOOv3.pushResolution(assertionId, agentWins)`
-- Durable Object tracks processed assertion IDs for idempotency
+- D1 database tracks `last_checked_block` and `processed_assertions` for idempotency
 
 ### Setup
 
 1. Create D1 database: `wrangler d1 create dvm-agent-state` then put the returned `database_id` in `wrangler.toml`.
-2. Copy `.dev.vars.example` to `.dev.vars` and set:
-   - `VENICE_API_KEY` – Venice AI API key
-   - `DVM_PRIVATE_KEY` – Wallet private key (needs XPL for gas on Plasma testnet)
-   - `RPC_URL` – Plasma testnet RPC (default: https://testnet-rpc.plasma.to)
-   - `ESCROW_ADDRESS`, `MOCK_OOv3_ADDRESS`, `DEPLOYMENT_BLOCK` – from `contracts/deployments/plasma-testnet.json`
+2. Apply migrations: `wrangler d1 migrations apply dvm-agent-state --remote`
+3. Set secrets: `wrangler secret put VENICE_API_KEY` and `wrangler secret put DVM_PRIVATE_KEY`
+4. Deploy: `cd dvm-agent && npm run deploy`
 
-2. Deploy:
-   ```bash
-   cd dvm-agent && npm install && wrangler secret put VENICE_API_KEY && wrangler secret put DVM_PRIVATE_KEY
-   npm run deploy
-   ```
+Config vars are in `wrangler.toml`. Optional: `PINATA_JWT`, `IPFS_GATEWAY`. See `dvm-agent/README.md`.
 
 ### Test Commands
 
 ```bash
 # Health check
-curl https://dvm-agent.<subdomain>.workers.dev/health
+curl https://dvm-agent.lynethlabs.workers.dev/health
 ```
 
-### End-to-end test (create dispute, DVM resolves)
+### End-to-end test
 
-1. **Create dispute onchain** (from contracts):
-   ```bash
-   cd contracts && npm run testnet:flow:path-b-uma-escalate
-   ```
-   This creates task → accepts → deposits → asserts → disputes → escalates to UMA. It stops there (does not pushResolution).
-
-2. **Wait 3 minutes** (UMA liveness = 180s).
-
-3. **Run DVM worker and trigger cron**:
-   ```bash
-   cd dvm-agent && npm run dev -- --test-scheduled
-   ```
-   Then in another terminal:
-   ```bash
-   curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
-   ```
-   The DVM will fetch the escalated dispute, call Venice, and pushResolution.
+1. `cd contracts && npm run testnet:flow:path-b-uma-escalate` – creates dispute, waits 180s, polls until DVM resolves.
+2. Local DVM: `cd dvm-agent && npm run dev -- --test-scheduled` then `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"`
+3. Check disputes: `cd contracts && npm run check:disputes`

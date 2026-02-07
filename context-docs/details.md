@@ -1,5 +1,7 @@
 # Vision for Intent-Based Tasks
 
+> This document extends the high-level vision with operational detail and sequence diagrams. The canonical high-level vision is **docs/VISION.md**.
+
 ## ERC8001 Agent Task System
 
 We create an ERC8001 intents-based system for agent tasks, with a market maker to accompany it, and UMA to secure it.
@@ -37,11 +39,11 @@ Market maker (us) routes this to an agent using ERC8004-backed semantic search o
 
 ### 3. Task Acceptance
 
-Agent accepts and puts up stake.
+Agent accepts the task and stakes collateral via `acceptTask(taskId, stakeAmount)`. Stake is held in the contract.
 
 ### 4. Payment Escrow
 
-User pays (x402 or other), and the smart contract logic includes a flat fee that is taken by the market maker on settlement.
+Client deposits payment via `depositPayment(taskId)` (only after task is Accepted). The smart contract logic includes a market-maker fee (basis points) taken on successful settlement.
 
 ### 5. Task Coordination
 
@@ -59,11 +61,11 @@ Agent completes task off-chain.
 
 1. Agent generates result
 2. Agent creates hash of result: `resultHash = keccak256(result)`
-3. Agent signs commitment: `signature = sign(taskId, resultHash)`
-4. Agent asserts completion **on our contract** with `(taskId, resultHash, signature)` → **onchain commitment created**
-5. Agent then sends result **directly to client** (off-chain, no IPFS/HTTP unless needed)
-6. If client disputes quality, evidence can be uploaded to IPFS/HTTP at that point
-7. Onchain commitment proves agent completed work at specific time
+3. Agent signs commitment: `signature = sign(taskId, resultHash)` (EIP-191 over `keccak256(abi.encode(taskId, resultHash))`)
+4. Agent calls **assertCompletion(taskId, resultHash, signature, resultURI)** on the contract. Optional `resultURI` (ipfs:// or https) can point to the result; cooldown starts.
+5. Agent sends result **directly to client** (off-chain). Client can also fetch from `resultURI` if set.
+6. If client disputes quality, evidence is uploaded to IPFS/HTTP and client calls `disputeTask(taskId, clientEvidenceURI)` (with dispute bond) during cooldown.
+7. Onchain commitment proves agent completed work at a specific time.
 
 **Key principle:** Evidence only uploaded when disputes happen. Normal flow is direct communication.
 
@@ -71,36 +73,34 @@ Agent completes task off-chain.
 
 ### Path A: NO CONTEST FLOW (Happy Path)
 
-- After cooldown period, stake becomes unlocked and can be claimed by agent
-- **Agent gets:** payment + stake back
-- **MM gets:** fee
-- **No evidence uploaded** - direct delivery was accepted
+- After cooldown period expires, **agent** calls `settleNoContest(taskId)` to settle.
+- **Agent gets:** payment (minus MM fee) + stake back
+- **MM gets:** fee (marketMakerFeeBps of payment)
+- **No evidence uploaded** — direct delivery was accepted
 - **No UMA interaction**
 
 ### Path B: DISPUTE FLOW (Client-Initiated During Cooldown)
 
 **Step 1: Local Dispute**
 
-- Client calls `disputeTask(taskId, evidenceURI)` during cooldown period
-- Client must post **dispute bond** (≥ UMA asserter bond + final fee)
-- Evidence uploaded to IPFS/HTTP for record
-- Task state: `DisputedAwaitingAgent`
+- Client calls `disputeTask(taskId, clientEvidenceURI)` **before** cooldown expires (`block.timestamp < cooldownEndsAt`). Client pays dispute bond (token transfer); bond size = `(paymentAmount * disputeBondBps) / 10000`.
+- Evidence uploaded to IPFS/HTTP and URI passed as `clientEvidenceURI`.
+- Task state: `DisputedAwaitingAgent`.
 
 **Step 2a: Agent Does Nothing (Default Resolution)**
 
-- After agent response window expires
+- After `cooldownEndsAt + agentResponseWindow` has passed, **client** calls `settleAgentConceded(taskId)`.
 - **Client wins locally:**
-    - Client gets: payment refund + dispute bond back + (optionally) portion of agent's stake
-    - Agent loses: some/all of performance stake (slashed)
+    - Client gets: payment refund + dispute bond back + agent's stake (full stake to client)
+    - Agent loses: performance stake
     - MM gets: nothing (task failed)
-- **No UMA interaction** - agent implicitly conceded
+- **No UMA interaction** — agent implicitly conceded
 
 **Step 2b: Agent Escalates (UMA Resolution)**
 
-- Agent calls `escalateToUMA(taskId, evidenceURI)` within response window
-- Agent must post **escalation bond** (≥ UMA disputer bond + final fee)
-- Both evidenceURIs forwarded to UMA
-- **NOW UMA is invoked:**
+- Agent calls `escalateToUMA(taskId, agentEvidenceURI)` within **agent response window** (before `cooldownEndsAt + agentResponseWindow`). Agent pays escalation bond: `max((paymentAmount * escalationBondBps) / 10000, umaConfig.minimumBond)`.
+- Both `clientEvidenceURI` and `agentEvidenceURI` are encoded in the UMA claim.
+- **UMA is invoked:**
     - Contract acts as asserter using agent's escalation bond
     - Contract acts as disputer using client's dispute bond
     - Assertion sent to UMA: *"Agent correctly completed task `<taskId>` according to description"*
@@ -119,21 +119,18 @@ Agent completes task off-chain.
 
 ### Path C: TIMEOUT/DEADLINE FLOW (Pre-Assertion)
 
-**Trigger conditions:**
-
-- Task deadline exceeded, OR
-- Agent accepted but hasn't asserted within reasonable timeframe (e.g., 2x estimated completion time)
+**Trigger:** Task **deadline** has been exceeded (contract does not enforce a separate "agent hasn't asserted" timeout; only `deadline` is checked). Task must still be in `Created` or `Accepted` status.
 
 **Process:**
 
 - Client calls `timeoutCancellation(taskId, reason)`
-- Contract verifies: deadline passed OR timeout threshold exceeded
+- Contract verifies: `block.timestamp >= deadline` and status is Created or Accepted
 - If conditions met:
-    - Task cancelled
-    - Client gets payment back
-    - Agent's stake slashed (penalty for non-performance)
+    - Task set to TimeoutCancelled
+    - If client had deposited payment, client gets payment back
+    - Agent's stake is transferred to the client (penalty for non-performance)
     - MM gets nothing (task failed)
-- If agent asserts before timeout processes, normal flow resumes
+- If agent asserts before client calls timeout, normal flow applies instead
 
 ### Path D: AGENT FAILURE FLOW (Non-Malicious)
 
@@ -156,18 +153,19 @@ Agents must provide cryptographic proof:
 ```
 1. Execute task → generate result
 2. Hash result → resultHash = keccak256(result)
-3. Sign (taskId, resultHash) → get agentSignature
-4. Call assertCompletion(taskId, resultHash, agentSignature) → onchain commitment + local cooldown starts
-5. Send result + signature DIRECTLY to client (off-chain communication)
-6. If dispute → agent may need to escalate with evidence uploaded to IPFS/HTTP
+3. Sign (taskId, resultHash) → get agentSignature (EIP-191)
+4. Call assertCompletion(taskId, resultHash, agentSignature, resultURI) → onchain commitment + cooldown starts (resultURI optional)
+5. Send result + signature directly to client (off-chain)
+6. After cooldown expires with no dispute, call settleNoContest(taskId) to receive payment + stake
+7. If client disputes, agent may escalate with escalateToUMA(taskId, agentEvidenceURI) (and bond) within agentResponseWindow
 ```
 
 **Client verification:**
 
-- Receives result directly from agent (HTTP, websocket, direct message, etc.)
+- Receives result directly from agent (or fetches from task's resultURI if set)
 - Checks `keccak256(result) == resultHash` from onchain assertion
 - Verifies `agentSignature` is valid
-- If mismatch or invalid → dispute with evidence (upload to IPFS/HTTP)
+- If mismatch or invalid → dispute during cooldown with `disputeTask(taskId, evidenceURI)` (pay dispute bond). After agent response window with no escalation, call `settleAgentConceded(taskId)`.
 
 **Note:** If agent forgets to assert after completing work, that's on them. No client-initiated assertion flow.
 
@@ -177,22 +175,17 @@ Agents must provide cryptographic proof:
 
 ### Dispute Evidence Requirements
 
-When client disputes, they supply:
+When client disputes (during cooldown), they call `disputeTask(taskId, clientEvidenceURI)` and post the dispute bond. The clientEvidenceURI typically points to:
 
-- **Task response** (uploaded to IPFS or HTTP **at time of dispute**)
-- **Task signature** (provided by agent during direct delivery)
-- **Evidence of violation** (schema mismatch, incomplete work, deadline miss, etc.)
+- Task response (as received from agent)
+- Task signature (from agent)
+- Evidence of violation (schema mismatch, incomplete work, etc.)
 
-If agent escalates, they supply:
+If agent escalates (within agentResponseWindow), they call `escalateToUMA(taskId, agentEvidenceURI)` and post the escalation bond. The agentEvidenceURI points to counter-evidence. Both URIs are encoded in the UMA claim for DVM review.
 
-- **Counter-evidence** (uploaded to IPFS or HTTP)
-- **Proof of correct completion**
+**Important:** Evidence is only uploaded to IPFS/HTTP when needed for dispute resolution. Normal successful tasks never touch IPFS/HTTP — just direct communication with onchain commitment.
 
-Both evidenceURIs are forwarded to UMA for DVM review if escalation occurs.
-
-**Important:** Evidence is only uploaded to IPFS/HTTP when needed for dispute resolution. Normal successful tasks never touch IPFS/HTTP - just direct communication with onchain commitment.
-
-Our contract would ideally be based on **ERC8001 intents**.
+The contract implements this flow and is aligned with **ERC8001** intents.
 
 ---
 
@@ -218,16 +211,12 @@ Our contract would ideally be based on **ERC8001 intents**.
 
 ### Bond Sizing
 
-Recommended structure:
+Contract uses basis points of payment amount:
 
-- `clientDisputeBond = max(UMA_MINIMUM, k * paymentAmount)` where `k ≈ 0.1` (10%)
-- `agentEscalationBond = max(UMA_MINIMUM, k * paymentAmount)` where `k ≈ 0.1` (10%)
+- **Dispute bond:** `clientDisputeBond = (paymentAmount * disputeBondBps) / 10000` (e.g. 1000 bps = 10%). Client must transfer this when calling `disputeTask`.
+- **Escalation bond:** `agentEscalationBond = max((paymentAmount * escalationBondBps) / 10000, umaConfig.minimumBond)`. Agent must transfer this when calling `escalateToUMA`.
 
-This ensures:
-
-- UMA costs always covered
-- Economic incentive alignment (disputes cost meaningful amount relative to task value)
-- Small tasks can optionally skip UMA tier entirely (rely on reputation only)
+This ensures UMA costs can be covered and escalation bond meets the oracle minimum.
 
 ---
 
@@ -262,72 +251,67 @@ sequenceDiagram
     MM->>T: Semantic search over agents + capabilities
     MM->>A: Broadcast ranked task offers
     A-->>MM: Accept offer + sign taskID
-    MM->>SC: Create task intent (ERC8001) + MM fee
-    C->>SC: Deposit payment
+    MM->>SC: Create task (descriptionURI, payment, deadline)
+    A->>SC: acceptTask(taskId, stakeAmount)
+    C->>SC: depositPayment(taskId)
     C->>A: Communicate taskId for tracking
-    A->>SC: Stake collateral
-    
 
-    Note over SC: Escrow funds & stake locked
+    Note over SC: Escrow: payment + stake locked
 
     A->>A: Execute task off-chain
 
     alt Normal Flow: Agent completes and asserts
-        A->>A: Generate result, hash it
-        A->>SC: assertCompletion(taskId, resultHash, signature)
-        Note over SC: Onchain commitment created (local cooldown starts)
+        A->>A: Generate result, hash it, sign (taskId, resultHash)
+        A->>SC: assertCompletion(taskId, resultHash, signature, resultURI)
+        Note over SC: Cooldown starts
         A->>C: Send result directly (off-chain)
 
-        Note over SC: Local cooldown period
+        Note over SC: Cooldown period
 
         alt No dispute (happy path)
-            Note over C,A: Direct delivery accepted, no evidence uploaded
-            Note over SC: Cooldown expires, no UMA interaction
-            SC->>A: Release payment + unlock stake
-            SC->>MM: Release MM fee
+            Note over C,A: Direct delivery accepted
+            A->>SC: settleNoContest(taskId)
+            SC->>A: Payment minus fee + stake
+            SC->>MM: MM fee
 
-        else Client disputes
-            C->>IPFS: Upload received result as evidence
-            C->>SC: disputeTask(taskId, evidenceURI, disputeBond)
-            Note over SC: DisputedAwaitingAgent state
+        else Client disputes (during cooldown)
+            C->>IPFS: Upload evidence
+            C->>SC: disputeTask(taskId, evidenceURI) + bond
+            Note over SC: DisputedAwaitingAgent
 
             alt Agent does nothing (concedes)
-                Note over SC: Agent response window expires
-                SC->>C: Refund payment + return dispute bond
-                SC->>SC: Slash agent's stake
-                Note over MM: No MM fee (task failed)
-                Note over UMA: No UMA interaction
+                Note over SC: agentResponseWindow expires
+                C->>SC: settleAgentConceded(taskId)
+                SC->>C: Payment + dispute bond + agent stake
+                Note over MM: No MM fee
 
-            else Agent escalates (fights)
+            else Agent escalates (within window)
                 A->>IPFS: Upload counter-evidence
-                A->>SC: escalateToUMA(taskId, evidenceURI, escalationBond)
-                SC->>UMA: assertTruth(...) using agent's bond as asserter
-                SC->>UMA: disputeAssertion(...) using client's bond as disputer
-                Note over UMA: DVM votes on outcome
+                A->>SC: escalateToUMA(taskId, agentEvidenceURI) + bond
+                SC->>UMA: assertTruth(...)
+                Note over UMA: DVM votes; callback to SC
 
-                alt UMA: Agent was correct
-                    UMA-->>SC: assertedTruthfully = true
-                    SC->>A: Payment + stake + escalation bond + client's dispute bond
-                    SC->>MM: Release MM fee
-                else UMA: Client was correct
-                    UMA-->>SC: assertedTruthfully = false
-                    SC->>C: Refund + dispute bond + agent's stake + escalation bond
-                    Note over MM: No MM fee (task failed)
+                alt UMA: Agent correct
+                    UMA-->>SC: assertionResolvedCallback(assertionId, true)
+                    SC->>A: Payment minus fee + stake + bonds
+                    SC->>MM: MM fee
+                else UMA: Client correct
+                    UMA-->>SC: assertionResolvedCallback(assertionId, false)
+                    SC->>C: Payment + dispute bond + agent stake + escalation bond
+                    Note over MM: No MM fee
                 end
             end
         end
 
-    else Edge Case 1: Timeout/Deadline exceeded
-        Note over SC: Deadline passed OR timeout threshold exceeded
+    else Edge Case 1: Deadline exceeded
+        Note over SC: block.timestamp >= deadline, status Created or Accepted
         C->>SC: timeoutCancellation(taskId, reason)
-        SC->>SC: Verify deadline/timeout condition
-        SC->>C: Refund payment
-        SC->>SC: Slash agent's stake (penalty)
+        SC->>C: Refund payment (if deposited) + agent stake
         Note over MM: No MM fee (task failed)
 
     else Edge Case 2: Agent cannot complete
         A->>SC: cannotComplete(taskId, reason)
-        SC->>C: Refund payment
+        SC->>C: Refund payment (if deposited)
         SC->>A: Refund stake
         Note over MM: No MM fee (task cancelled)
     end
@@ -368,9 +352,9 @@ Issue is that, why would a yield farming agent put up a bond equal to user's sta
 
 ### Covered in Flow
 
-1. ✅ **Timeout/Deadline exceeded** → Client can initiate cancellation with automatic verification (deadline passed OR agent ghosting)
-2. ✅ **Non-receipt/Quality disputes** → Agent creates onchain commitment (hash+sig), then direct delivery; two-stage dispute (local first, UMA only if agent escalates)
-3. ✅ **Non-malicious failure** → Agent can signal "cannot complete" for clean cancellation
+1. ✅ **Timeout/Deadline exceeded** → Client calls `timeoutCancellation` when `block.timestamp >= deadline` (task still Created or Accepted). Contract transfers payment and agent stake to client.
+2. ✅ **Non-receipt/Quality disputes** → Agent creates onchain commitment (hash + sig, optional resultURI), then direct delivery; client may dispute during cooldown; agent may escalate within agentResponseWindow; UMA resolves if escalated.
+3. ✅ **Non-malicious failure** → Agent calls `cannotComplete` for clean cancellation (payment and stake returned).
 
 ### Additional Considerations (Future)
 
@@ -387,25 +371,24 @@ Issue is that, why would a yield farming agent put up a bond equal to user's sta
 
 **Normal flow (no dispute):**
 
-- Agent: Generate result → Hash → Sign → Assert on contract → Send directly to client
-- Client: Verify hash matches → Accept
+- Agent: Generate result → Hash → Sign → assertCompletion(taskId, resultHash, signature, resultURI) → Send result directly to client
+- After cooldown: Agent calls settleNoContest(taskId) → receives payment (minus MM fee) + stake
 - **No IPFS/HTTP uploads**
 - **No UMA interaction**
 
 **Dispute flow (agent concedes):**
 
-- Client: Upload evidence to IPFS/HTTP → Dispute on contract with bond
-- Agent: Does nothing (implicitly concedes)
-- Contract: Local resolution, client wins
+- Client: Upload evidence → disputeTask(taskId, evidenceURI) with bond (during cooldown)
+- Agent: Does nothing within agentResponseWindow
+- After cooldownEndsAt + agentResponseWindow: Client calls settleAgentConceded(taskId) → client receives payment + dispute bond + agent stake
 - **No UMA interaction**
 
 **Dispute flow (agent fights):**
 
-- Client: Upload evidence to IPFS/HTTP → Dispute on contract with bond
-- Agent: Upload counter-evidence to IPFS/HTTP → Escalate with bond
-- Contract: Forward both evidenceURIs to UMA as asserter + disputer
-- UMA DVM: Vote on outcome
-- Contract: Redistribute funds based on UMA decision
-- **UMA interaction only when both sides escalate**
+- Client: disputeTask(taskId, evidenceURI) with bond
+- Agent: escalateToUMA(taskId, agentEvidenceURI) with bond (within agentResponseWindow)
+- Contract: assertTruth to UMA; DVM votes; oracle calls assertionResolvedCallback on contract
+- Contract: Redistributes funds (agent or client wins)
+- **UMA interaction only when agent escalates**
 
 [Tech spec](https://www.notion.so/Tech-spec-2fe3a9ea329d809ba783fba61cbb46cf?pvs=21)

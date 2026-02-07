@@ -54,12 +54,18 @@ npm run testnet:flow:path-b-uma-agent
 # Path B – dispute, UMA resolution (client wins) (~3 min wait)
 npm run testnet:flow:path-b-uma-client
 
+# Path B – escalate to UMA, DVM resolves (requires PINATA_JWT, DVM worker)
+npm run testnet:flow:path-b-uma-escalate
+
 # Path C – timeout cancellation
 npm run testnet:flow:path-c
 
 # Path D – agent cannot complete
 npm run testnet:flow:path-d
 ```
-Add `PINATA_JWT` to `.env` for IPFS uploads when using spec/evidence objects.
+
+**Check escalated disputes:** `npm run check:disputes` – lists disputes, UMA liveness status, resolved on-chain.
+
+Only `path-b-uma-escalate` requires the DVM worker; `path-b-uma-agent` and `path-b-uma-client` use MockOOv3 pushResolution only (no live DVM). Add `PINATA_JWT` to `.env` (or sdk/.env) for path-b-uma flows (IPFS uploads).
 
 See `docs/TECHNICAL_SPEC.md` for interface definitions.

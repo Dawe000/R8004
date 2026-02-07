@@ -92,6 +92,8 @@ Standalone functions (Provider-only, no signer required):
 | `getNextTaskId(escrowAddress, provider)` | Get next task ID (total task count). |
 | `getTask(escrowAddress, provider, taskId)` | Fetch task by ID. |
 | `getTaskDescriptionUri(escrowAddress, provider, taskId)` | Fetch task description URI from TaskCreated event (null if none). |
+| `getEscalatedDisputes(escrowAddress, provider, fromBlock, toBlock?)` | Fetch escalated disputes from TaskDisputeEscalated events (event-based). |
+| `getEscalationBlockForTask(escrowAddress, provider, taskId, fromBlock?)` | Fetch block when task was escalated (null if none). |
 | `fetchTaskSpecFromOnchainUri(escrowAddress, provider, taskId, options?)` | Resolve `descriptionURI`, fetch IPFS content, and parse canonical task spec. |
 | `getEscrowConfig(escrowAddress, provider)` | Fetch escrow timing and bond params (cooldownPeriod, agentResponseWindow, disputeBondBps, escalationBondBps, umaConfig). |
 | `getTasksByClient(escrowAddress, provider, clientAddress)` | Get tasks created by client. |
@@ -166,6 +168,7 @@ interface SDKConfig {
   chainId: number;
   rpcUrl?: string;
   marketMakerUrl?: string;
+  deploymentBlock?: number | bigint;  // limits eth_getLogs fromBlock (required for Plasma)
   ipfs?: {
     provider: "pinata" | "nft.storage" | "mock";
     apiKey?: string;  // not required for mock
