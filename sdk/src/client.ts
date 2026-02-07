@@ -1,32 +1,20 @@
 import type { Signer } from "ethers";
-import type { SDKConfig } from "./config.js";
-import type { Task, TaskMatchRequest, TaskMatchResponse } from "./types.js";
+import type { SDKConfig } from "./config";
+import type { Task, TaskMatchRequest, TaskMatchResponse } from "./types";
 import {
   getEscrowContract,
   getErc20Contract,
   parseTask,
   ensureAllowance,
-} from "./contract.js";
-import {
-  getTasksByClient,
-  getClientTasksNeedingAction,
-  isInProgress,
-} from "./tasks.js";
-import { uploadJson, fetchTaskEvidence } from "./ipfs.js";
-import { matchAgents } from "./marketmaker.js";
+} from "./contract";
+import { uploadJson } from "./ipfs";
+import { matchAgents } from "./marketmaker";
 
 export class ClientSDK {
   constructor(
     private config: SDKConfig,
     private signer: Signer
   ) {}
-
-  /** Get provider from signer; throws if not available */
-  private getProvider() {
-    const provider = this.signer.provider;
-    if (!provider) throw new Error("Signer has no provider");
-    return provider;
-  }
 
   /** Get task by ID */
   async getTask(taskId: bigint): Promise<Task> {
@@ -119,44 +107,6 @@ export class ClientSDK {
   async timeoutCancellation(taskId: bigint, reason: string): Promise<void> {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     await (await escrow.timeoutCancellation(taskId, reason)).wait();
-  }
-
-  /** Get tasks created by this client (uses signer address) */
-  async getMyTasks(inProgressOnly = false): Promise<Task[]> {
-    const provider = this.getProvider();
-    const address = await this.signer.getAddress();
-    const tasks = await getTasksByClient(
-      this.config.escrowAddress,
-      provider,
-      address,
-      this.config.deploymentBlock
-    );
-    if (inProgressOnly) return tasks.filter(isInProgress);
-    return tasks;
-  }
-
-  /** Fetch client and agent evidence from task (from clientEvidenceURI, agentEvidenceURI) */
-  async fetchEvidenceForTask(
-    taskId: bigint,
-    options?: { gateway?: string; asJson?: boolean }
-  ): Promise<{ clientEvidence?: string | unknown; agentEvidence?: string | unknown }> {
-    const task = await this.getTask(taskId);
-    return fetchTaskEvidence(task, options);
-  }
-
-  /** Get tasks where this client can take action (dispute, settleAgentConceded, timeoutCancel) */
-  async getTasksNeedingAction(): Promise<Task[]> {
-    const provider = this.getProvider();
-    const address = await this.signer.getAddress();
-    const block = await provider.getBlock("latest");
-    const blockTimestamp = block?.timestamp ?? Math.floor(Date.now() / 1000);
-    return getClientTasksNeedingAction(
-      this.config.escrowAddress,
-      provider,
-      address,
-      blockTimestamp,
-      { fromBlock: this.config.deploymentBlock }
-    );
   }
 
   /** Match agents via market maker API (requires config.marketMakerUrl) */

@@ -1,10 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TaskSearchBox } from '@/components/TaskSearchBox';
 import { AgentRoutesList } from '@/components/AgentRoutesList';
+import { TaskConfigForm } from '@/components/TaskConfigForm';
 import { useAgentMatching } from '@/hooks/useAgentMatching';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Settings, RefreshCw, ArrowDown } from 'lucide-react';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
@@ -15,14 +15,107 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import HubIcon from '@mui/icons-material/Hub';
 import DarkVeil from '@/components/ui/DarkVeil';
 import Image from 'next/image';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAgentSDK } from '@/hooks/useAgentSDK';
+import { MOCK_TOKEN_ADDRESS, ESCROW_ADDRESS } from '@/config/constants';
+import { parseEther, formatEther } from 'ethers';
+import { useAccount, useReadContract } from 'wagmi';
+import { toast } from 'sonner';
 
 export default function Home() {
+  const { address } = useAccount();
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('0.00');
+  const [deadline, setDeadline] = useState(Math.floor(Date.now() / 1000) + 3600); // Default 1 hour
+  const [isCreating, setIsCreating] = useState(false);
   const { data: agents, isLoading, error } = useAgentMatching(query);
+  const sdk = useAgentSDK();
 
-  const handleCreateTask = () => {
-    alert('Wallet connection needed for task creation (Phase 2)');
+  // Sync payment amount with selected agent's stake requirements
+  useEffect(() => {
+    if (selectedAgentId && agents) {
+      const selectedAgent = agents.find(a => a.agent.agentId === selectedAgentId);
+      if (selectedAgent?.agent.sla?.minAcceptanceStake) {
+        const minStake = formatEther(selectedAgent.agent.sla.minAcceptanceStake);
+        // We set the payment to be the same as the min stake for now, or a bit more
+        setPaymentAmount(minStake);
+      }
+    }
+  }, [selectedAgentId, agents]);
+
+  // Fetch balance
+  const { data: balance } = useReadContract({
+    address: MOCK_TOKEN_ADDRESS as `0x${string}`,
+    abi: [
+      {
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ name: '', type: 'uint256' }],
+      },
+    ],
+    functionName: 'balanceOf',
+    args: address ? [address as `0x${string}`] : undefined,
+    query: {
+      enabled: !!address,
+    }
+  });
+
+  const handleCreateTask = async () => {
+    if (!sdk || !query) return;
+    setIsCreating(true);
+    const toastId = toast.loading('Initializing task creation...');
+    
+    try {
+      const amount = parseEther(paymentAmount);
+      
+      // 1. Check Allowance for TST tokens
+      toast.loading('Checking token allowance...', { id: toastId });
+      const { ensureAllowance } = await import('@sdk/index');
+      await (await sdk.client.getTask(0n)); // Warm up
+      
+      // Note: ensureAllowance returns a transaction response if approval is needed
+      const approvalTx = await ensureAllowance(
+        MOCK_TOKEN_ADDRESS,
+        (sdk.client as any).signer, // Access signer from SDK
+        ESCROW_ADDRESS,
+        amount
+      );
+      
+      if (approvalTx) {
+        toast.loading('Waiting for token approval...', { id: toastId });
+        await approvalTx.wait();
+        toast.success('Token approved!', { id: toastId });
+      }
+
+      // 2. Create task on-chain
+      toast.loading('Creating task on-chain...', { id: toastId });
+      const taskId = await sdk.client.createTask(
+        query,
+        MOCK_TOKEN_ADDRESS,
+        amount,
+        deadline // Use deadline from TaskConfigForm
+      );
+
+      toast.success(`Task created (ID: ${taskId})! Waiting for agent to accept...`, { id: toastId });
+
+      // Note: Payment will be deposited after agent accepts the task
+      // The agent must call acceptTask() first, then client calls depositPayment()
+      
+    } catch (err: any) {
+      console.error('Task creation failed:', err);
+      let message = err.message || 'Unknown error';
+      if (message.includes('user rejected')) {
+        message = 'Transaction rejected by user.';
+      } else if (message.includes('execution reverted')) {
+        message = 'Transaction reverted. Do you have enough tokens?';
+      }
+      toast.error(`Error: ${message}`, { id: toastId });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -48,12 +141,10 @@ export default function Home() {
           <span className="text-lg font-bold tracking-tight text-white">EthOxford<span className="text-primary">Agents</span></span>
         </div>
         <div className="hidden md:flex gap-1 p-1 bg-white/5 rounded-full border border-white/10">
-          <button className="px-4 py-1.5 rounded-full bg-white/10 text-white font-medium text-xs shadow-sm transition-all">Exchange</button>
+          <button className="px-4 py-1.5 rounded-full bg-white/10 text-white font-medium text-xs transition-all">Exchange</button>
           <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">Portfolio</button>
         </div>
-        <button className="px-5 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-full font-semibold text-sm transition-all shadow-lg shadow-primary/20">
-          Connect Wallet
-        </button>
+        <ConnectButton />
       </nav>
 
       {/* Main Content Container */}
@@ -69,10 +160,10 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-3 relative min-h-0">
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors flex-1 flex flex-col">
-                <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest flex-none">Task Description</label>
-                <div className="flex-1 min-h-0">
+            <div className="flex-1 flex flex-col gap-3 relative min-h-0 overflow-y-auto pr-2">
+              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors flex-none">
+                <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest">Task Description</label>
+                <div>
                   <TaskSearchBox onSearch={setQuery} />
                 </div>
               </div>
@@ -86,25 +177,50 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-1 flex flex-col justify-center">
+              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-none">
                 <label className="text-[10px] font-bold text-muted-foreground mb-1 block uppercase tracking-widest">Estimated Cost</label>
                 <div className="flex justify-between items-end">
-                  <span className="text-5xl font-black text-white tracking-tighter">0.00</span>
-                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1">
-                      <Image 
-                        src="/ethereum-eth-logo.svg" 
-                        alt="Ethereum Logo" 
-                        width={24} 
-                        height={24} 
+                  {selectedAgentId ? (
+                    <input
+                      type="text"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full animate-in fade-in slide-in-from-left-2"
+                    />
+                  ) : (
+                    <div className="text-2xl font-bold text-white/20 tracking-tight h-[60px] flex items-center">
+                      Search & Select Agent...
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1 flex-none">
+                      <Image
+                        src="/chain-light.svg"
+                        alt="Network Logo"
+                        width={24}
+                        height={24}
                         className="w-5 h-5 object-contain"
                       />
-                      <span className="font-bold text-base text-white">ETH</span>
+                      <span className="font-bold text-base text-white">XPL</span>
                   </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium">
-                  <span>$0.00 USD</span>
-                  <span>Balance: 0.00 ETH</span>
+                <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
+                  {selectedAgentId ? (
+                    <>
+                      <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
+                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} TST</span>
+                    </>
+                  ) : (
+                    <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
+                  )}
                 </div>
+
+                {/* Task Configuration Form */}
+                {selectedAgentId && (
+                  <TaskConfigForm
+                    paymentAmount={paymentAmount}
+                    onDeadlineChange={setDeadline}
+                  />
+                )}
               </div>
             </div>
 

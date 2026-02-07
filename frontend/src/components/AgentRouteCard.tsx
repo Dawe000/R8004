@@ -49,7 +49,7 @@ export function AgentRouteCard({
             {/* Right: Stake */}
             <div className="text-right">
               <div className="font-black text-lg">{(parseFloat(agent.agent.sla.minAcceptanceStake) / 1e18).toFixed(4)}</div>
-              <div className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter">ETH STAKE</div>
+              <div className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter">XPL STAKE</div>
             </div>
           </div>
 

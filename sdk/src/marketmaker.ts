@@ -1,7 +1,7 @@
 import type {
   TaskMatchRequest,
   TaskMatchResponse,
-} from "./types.js";
+} from "./types";
 
 /**
  * Call market maker match-agents API

@@ -1,85 +1,6 @@
 import { keccak256, toUtf8Bytes, getBytes } from "ethers";
-import type { IpfsConfig } from "./config.js";
-import { DEFAULT_IPFS_URI_SCHEME } from "./config.js";
-import type { Task } from "./types.js";
-
-const DEFAULT_IPFS_GATEWAY = "https://ipfs.io/ipfs/";
-
-/** Convert IPFS URI to gateway URL */
-function ipfsUriToGatewayUrl(
-  uri: string,
-  gateway: string = DEFAULT_IPFS_GATEWAY
-): string {
-  uri = uri.trim();
-  if (!uri) return "";
-  if (uri.startsWith("ipfs://")) {
-    const cid = uri.slice(7);
-    return `${gateway.replace(/\/$/, "")}/${cid}`;
-  }
-  if (uri.includes("/ipfs/")) {
-    return uri;
-  }
-  return `${gateway.replace(/\/$/, "")}/${uri}`;
-}
-
-/**
- * Fetch content from IPFS URI.
- * Supports ipfs://CID or https://gateway/ipfs/CID. No API key needed.
- */
-export async function fetchFromIpfs(
-  uri: string,
-  options?: { gateway?: string; asJson?: boolean }
-): Promise<string | unknown> {
-  const trimmed = uri?.trim();
-  if (!trimmed) {
-    throw new Error("fetchFromIpfs: empty URI");
-  }
-  const url = ipfsUriToGatewayUrl(trimmed, options?.gateway ?? DEFAULT_IPFS_GATEWAY);
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`fetchFromIpfs: ${res.status} ${res.statusText} for ${uri}`);
-  }
-  const text = await res.text();
-  if (options?.asJson) {
-    return JSON.parse(text) as unknown;
-  }
-  return text;
-}
-
-/** Fetch content at client evidence URI (wrapper over fetchFromIpfs) */
-export async function fetchClientEvidence(
-  uri: string,
-  options?: { gateway?: string; asJson?: boolean }
-): Promise<string | unknown | null> {
-  const trimmed = uri?.trim();
-  if (!trimmed) return null;
-  return fetchFromIpfs(trimmed, options);
-}
-
-/** Fetch content at agent evidence URI (wrapper over fetchFromIpfs) */
-export async function fetchAgentEvidence(
-  uri: string,
-  options?: { gateway?: string; asJson?: boolean }
-): Promise<string | unknown | null> {
-  const trimmed = uri?.trim();
-  if (!trimmed) return null;
-  return fetchFromIpfs(trimmed, options);
-}
-
-/** Fetch both client and agent evidence from task. Skips empty URIs. */
-export async function fetchTaskEvidence(
-  task: Task,
-  options?: { gateway?: string; asJson?: boolean }
-): Promise<{ clientEvidence?: string | unknown; agentEvidence?: string | unknown }> {
-  const result: { clientEvidence?: string | unknown; agentEvidence?: string | unknown } = {};
-  if (task.clientEvidenceURI?.trim()) {
-    result.clientEvidence = await fetchFromIpfs(task.clientEvidenceURI, options);
-  }
-  if (task.agentEvidenceURI?.trim()) {
-    result.agentEvidence = await fetchFromIpfs(task.agentEvidenceURI, options);
-  }
-  return result;
-}
+import type { IpfsConfig } from "./config";
+import { DEFAULT_IPFS_URI_SCHEME } from "./config";
 
 /** Mock CID from content hash - same content = same URI, no network calls */
 function mockCid(content: string | Uint8Array): string {
@@ -161,7 +82,7 @@ async function pinFile(
   content: Blob | Uint8Array,
   config: IpfsConfig
 ): Promise<string> {
-  const blob = content instanceof Blob ? content : new Blob([content]);
+  const blob = content instanceof Blob ? content : new Blob([content as any]);
 
   if (config.provider === "mock") {
     const buf =

@@ -5,7 +5,7 @@ import {
   type Provider,
   type InterfaceAbi,
 } from "ethers";
-import type { Task, TaskStatus } from "./types.js";
+import type { Task, TaskStatus } from "./types";
 
 /** Minimal ABI for AgentTaskEscrow - all functions used by SDK */
 const ESCROW_ABI: InterfaceAbi = [
