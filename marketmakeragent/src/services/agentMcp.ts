@@ -23,8 +23,13 @@ export class AgentMcpClient {
 	constructor(private baseUrl: string = 'https://example-agent.lynethlabs.workers.dev') {}
 
 	async getAgentCard(agentId: string): Promise<any> {
-		const response = await fetch(`${this.baseUrl}/${agentId}/card`);
+		const url = `${this.baseUrl}/${agentId}/card`;
+		console.log(`Fetching agent card from: ${url}`);
+		const response = await fetch(url);
+		console.log(`Response status for agent ${agentId}: ${response.status}`);
 		if (!response.ok) {
+			const text = await response.text();
+			console.error(`Failed to fetch agent ${agentId} from ${url}: ${response.status} - ${text}`);
 			throw new Error(`Failed to fetch agent card: ${response.status}`);
 		}
 		return response.json();

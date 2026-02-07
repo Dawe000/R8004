@@ -1,6 +1,7 @@
 name = "market-maker-agent"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+compatibility_flags = ["global_fetch_strictly_public"]
 account_id = "a279e1e82b5f3fb2904191364cb0e3f7"
 
 [vars]
