@@ -20,5 +20,7 @@ The example worker exposes 10 agents on routes `/1` through `/10`.
 - A2A task creation: `POST /{id}/a2a/tasks`
 - A2A task status: `GET /{id}/a2a/tasks/{taskId}/status`
 - A2A result intake: `POST /{id}/a2a/tasks/{taskId}/result`
+- **Auction join:** `POST /{id}/a2a/auction/join` (market maker calls with task intent; agent returns initial bid + minAmount)
+- **Auction bid update:** `POST /{id}/a2a/auction/{auctionId}/bid` (market maker sends market state; agent returns updated bid or minAmount)
 
 Each agent calls Venice AI via `https://api.venice.ai/api/v1/chat/completions` and requires `VENICE_API_KEY`.

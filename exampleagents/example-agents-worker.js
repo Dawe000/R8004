@@ -62,6 +62,8 @@ export default {
             `/${agentId}/a2a/tasks`,
             `/${agentId}/a2a/tasks/{taskId}/status`,
             `/${agentId}/a2a/tasks/{taskId}/result`,
+            `/${agentId}/a2a/auction/join`,
+            `/${agentId}/a2a/auction/{auctionId}/bid`,
           ],
         },
         200,
@@ -99,6 +101,10 @@ export default {
 
     if (segments[1] === 'a2a' && segments[2] === 'tasks') {
       return handleA2ATasks(request, env, corsHeaders, agent, segments);
+    }
+
+    if (segments[1] === 'a2a' && segments[2] === 'auction') {
+      return handleA2AAuction(request, env, corsHeaders, agent, segments);
     }
 
     return jsonResponse(
@@ -171,6 +177,91 @@ async function handleA2ATasks(request, env, corsHeaders, agent, segments) {
   return jsonResponse(
     { error: 'Unsupported /a2a/tasks route.' },
     404,
+    corsHeaders
+  );
+}
+
+async function handleA2AAuction(request, env, corsHeaders, agent, segments) {
+  if (segments[3] === 'join' && request.method === 'POST' && segments.length === 4) {
+    return handleAuctionJoin(request, corsHeaders, agent);
+  }
+  if (segments[4] === 'bid' && request.method === 'POST' && segments.length === 5) {
+    const auctionId = segments[3];
+    return handleAuctionBid(request, corsHeaders, agent, auctionId);
+  }
+  return jsonResponse(
+    { error: 'Unsupported /a2a/auction route.' },
+    404,
+    corsHeaders
+  );
+}
+
+function getAgentAuctionDefaults(agentId) {
+  const baseMin = 100n;
+  const baseAsk = 150n;
+  const id = BigInt(agentId);
+  return {
+    minAmount: String(baseMin + id * 10n),
+    ask: String(baseAsk + id * 10n),
+  };
+}
+
+async function handleAuctionJoin(request, corsHeaders, agent) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400, corsHeaders);
+  }
+  const { auctionId, taskSpec, paymentToken, taskDeadline, expiresAt } = body || {};
+  if (!auctionId) {
+    return jsonResponse({ error: 'Missing auctionId' }, 400, corsHeaders);
+  }
+  const { minAmount, ask } = getAgentAuctionDefaults(agent.id);
+  const stakeAmount = '50';
+  return jsonResponse(
+    {
+      agentId: agent.id,
+      ask,
+      minAmount,
+      stakeAmount,
+      taskDeadline: taskDeadline || null,
+    },
+    200,
+    corsHeaders
+  );
+}
+
+async function handleAuctionBid(request, corsHeaders, agent, auctionId) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400, corsHeaders);
+  }
+  const { minAmount, ask } = getAgentAuctionDefaults(agent.id);
+  const marketState = body?.marketState;
+  let newAsk = ask;
+  if (marketState?.competingPrices && Array.isArray(marketState.competingPrices)) {
+    const minCompeting = marketState.competingPrices.reduce((min, p) => {
+      const val = BigInt(p.price || p);
+      return min === null || val < min ? val : min;
+    }, null);
+    if (minCompeting !== null) {
+      const floor = BigInt(minAmount);
+      const undercut = minCompeting - 1n;
+      newAsk = String(undercut > floor ? undercut : floor);
+    }
+  }
+  return jsonResponse(
+    {
+      auctionId,
+      agentId: agent.id,
+      ask: newAsk,
+      minAmount,
+      message: 'Bid updated',
+    },
+    200,
     corsHeaders
   );
 }
