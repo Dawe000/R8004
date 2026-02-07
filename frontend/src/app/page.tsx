@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { TaskSearchBox } from '@/components/TaskSearchBox';
 import { AgentRoutesList } from '@/components/AgentRoutesList';
+import { TaskConfigForm } from '@/components/TaskConfigForm';
 import { useAgentMatching } from '@/hooks/useAgentMatching';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
@@ -26,6 +27,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('0.00');
+  const [deadline, setDeadline] = useState(Math.floor(Date.now() / 1000) + 3600); // Default 1 hour
   const [isCreating, setIsCreating] = useState(false);
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
@@ -90,12 +92,11 @@ export default function Home() {
 
       // 2. Create task on-chain
       toast.loading('Creating task on-chain...', { id: toastId });
-      const deadline = Math.floor(Date.now() / 1000) + 3600;
       const taskId = await sdk.client.createTask(
         query,
         MOCK_TOKEN_ADDRESS,
         amount,
-        deadline
+        deadline // Use deadline from TaskConfigForm
       );
 
       toast.success(`Task created (ID: ${taskId})! Waiting for agent to accept...`, { id: toastId });
@@ -159,10 +160,10 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-3 relative min-h-0">
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors flex-1 flex flex-col">
-                <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest flex-none">Task Description</label>
-                <div className="flex-1 min-h-0">
+            <div className="flex-1 flex flex-col gap-3 relative min-h-0 overflow-y-auto pr-2">
+              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors flex-none">
+                <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest">Task Description</label>
+                <div>
                   <TaskSearchBox onSearch={setQuery} />
                 </div>
               </div>
@@ -176,12 +177,12 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-1 flex flex-col justify-center">
+              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-none">
                 <label className="text-[10px] font-bold text-muted-foreground mb-1 block uppercase tracking-widest">Estimated Cost</label>
                 <div className="flex justify-between items-end">
                   {selectedAgentId ? (
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full animate-in fade-in slide-in-from-left-2"
@@ -192,11 +193,11 @@ export default function Home() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1 flex-none">
-                      <Image 
-                        src="/chain-light.svg" 
-                        alt="Network Logo" 
-                        width={24} 
-                        height={24} 
+                      <Image
+                        src="/chain-light.svg"
+                        alt="Network Logo"
+                        width={24}
+                        height={24}
                         className="w-5 h-5 object-contain"
                       />
                       <span className="font-bold text-base text-white">XPL</span>
@@ -212,6 +213,14 @@ export default function Home() {
                     <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
                   )}
                 </div>
+
+                {/* Task Configuration Form */}
+                {selectedAgentId && (
+                  <TaskConfigForm
+                    paymentAmount={paymentAmount}
+                    onDeadlineChange={setDeadline}
+                  />
+                )}
               </div>
             </div>
 
