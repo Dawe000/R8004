@@ -9,6 +9,8 @@ export const PLASMA_TESTNET_DEFAULTS = {
   mockOOv3Address: "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310" as const,
   chainId: 9746,
   rpcUrl: "https://testnet-rpc.plasma.to",
+  /** Escrow deployment block - used to limit eth_getLogs range on RPCs with 10k block limit (Plasma) */
+  deploymentBlock: 14612077,
 } as const;
 
 export interface IpfsConfig {
@@ -30,6 +32,8 @@ export interface SDKConfig {
   marketMakerUrl?: string;
   /** IPFS pinning config - required for createTask with spec, disputeTask, escalateToUMA */
   ipfs?: IpfsConfig;
+  /** Escrow deployment block - limits eth_getLogs fromBlock on RPCs with 10k block limit (e.g. Plasma) */
+  deploymentBlock?: number | bigint;
 }
 
 /** Default IPFS URI scheme */
@@ -42,7 +46,7 @@ export const DEFAULT_IPFS_URI_SCHEME = "ipfs" as const;
  */
 export function getPlasmaTestnetConfig(
   overrides?: Partial<
-    SDKConfig & { mockTokenAddress?: string; mockOOv3Address?: string }
+    SDKConfig & { mockTokenAddress?: string; mockOOv3Address?: string; deploymentBlock?: number | bigint }
   >
 ): SDKConfig & { mockTokenAddress: string; mockOOv3Address: string } {
   const fromEnv = {
@@ -51,6 +55,9 @@ export function getPlasmaTestnetConfig(
     chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID, 10) : undefined,
     mockTokenAddress: process.env.MOCK_TOKEN_ADDRESS,
     mockOOv3Address: process.env.MOCK_OOv3_ADDRESS,
+    deploymentBlock: process.env.DEPLOYMENT_BLOCK
+      ? parseInt(process.env.DEPLOYMENT_BLOCK, 10)
+      : undefined,
   };
   return {
     escrowAddress:
@@ -74,5 +81,9 @@ export function getPlasmaTestnetConfig(
       overrides?.mockOOv3Address ??
       fromEnv.mockOOv3Address ??
       PLASMA_TESTNET_DEFAULTS.mockOOv3Address,
+    deploymentBlock:
+      overrides?.deploymentBlock ??
+      fromEnv.deploymentBlock ??
+      PLASMA_TESTNET_DEFAULTS.deploymentBlock,
   };
 }

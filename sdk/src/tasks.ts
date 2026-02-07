@@ -1,7 +1,35 @@
-import type { Provider } from "ethers";
+import type { Contract, Provider } from "ethers";
 import { getEscrowContract, parseTask } from "./contract.js";
 import { TaskStatus } from "./types.js";
 import type { Task } from "./types.js";
+
+/** Plasma RPC and many others limit eth_getLogs to 10,000 blocks per query */
+const LOG_CHUNK_SIZE = 10_000;
+
+type EventFilter = Parameters<Contract["queryFilter"]>[0];
+
+/** Query filter in 10k-block chunks to respect RPC limits (e.g. Plasma 10k). Returns events from fromBlock to latest. */
+async function queryFilterChunked(
+  escrow: Contract,
+  filter: EventFilter,
+  fromBlock: bigint,
+  provider: Provider
+): Promise<Awaited<ReturnType<Contract["queryFilter"]>>> {
+  const block = await provider.getBlockNumber();
+  const toBlock = BigInt(block);
+  if (fromBlock > toBlock) return [];
+
+  const all: Awaited<ReturnType<Contract["queryFilter"]>> = [];
+  let start = fromBlock;
+  while (start <= toBlock) {
+    const end = start + BigInt(LOG_CHUNK_SIZE) - 1n;
+    const chunkEnd = end > toBlock ? toBlock : end;
+    const events = await escrow.queryFilter(filter, start, chunkEnd);
+    all.push(...events);
+    start = chunkEnd + 1n;
+  }
+  return all;
+}
 
 /** Next action a role can take on a task */
 export type TaskAction =
@@ -165,11 +193,13 @@ export async function getTasksByIdRange(
 export async function getTasksByClient(
   escrowAddress: string,
   provider: Provider,
-  clientAddress: string
+  clientAddress: string,
+  fromBlock?: number | bigint
 ): Promise<Task[]> {
   const escrow = getEscrowContract(escrowAddress, provider);
   const filter = escrow.filters.TaskCreated(null, clientAddress);
-  const events = await escrow.queryFilter(filter);
+  const start = fromBlock !== undefined ? BigInt(fromBlock) : 0n;
+  const events = await queryFilterChunked(escrow, filter, start, provider);
   const taskIds = [
     ...new Set(
       events.map((e) => ("args" in e && e.args ? (e.args as { taskId?: bigint }).taskId ?? 0n : 0n))
@@ -187,11 +217,13 @@ export async function getTasksByClient(
 export async function getTasksByAgent(
   escrowAddress: string,
   provider: Provider,
-  agentAddress: string
+  agentAddress: string,
+  fromBlock?: number | bigint
 ): Promise<Task[]> {
   const escrow = getEscrowContract(escrowAddress, provider);
   const filter = escrow.filters.TaskAccepted(null, agentAddress);
-  const events = await escrow.queryFilter(filter);
+  const start = fromBlock !== undefined ? BigInt(fromBlock) : 0n;
+  const events = await queryFilterChunked(escrow, filter, start, provider);
   const taskIds = [
     ...new Set(
       events.map((e) => ("args" in e && e.args ? (e.args as { taskId?: bigint }).taskId ?? 0n : 0n))
@@ -210,11 +242,13 @@ export async function getTasksByAgent(
 export async function getTaskDescriptionUri(
   escrowAddress: string,
   provider: Provider,
-  taskId: bigint
+  taskId: bigint,
+  fromBlock?: number | bigint
 ): Promise<string | null> {
   const escrow = getEscrowContract(escrowAddress, provider);
   const filter = escrow.filters.TaskCreated(taskId);
-  const events = await escrow.queryFilter(filter);
+  const start = fromBlock !== undefined ? BigInt(fromBlock) : 0n;
+  const events = await queryFilterChunked(escrow, filter, start, provider);
   const first = events[0];
   if (!first || !("args" in first) || !first.args) return null;
   const args = first.args as { taskId?: bigint; client?: string; descriptionURI?: string };
@@ -269,9 +303,10 @@ export async function getClientIntents(
   escrowAddress: string,
   provider: Provider,
   clientAddress: string,
-  inProgressOnly = false
+  inProgressOnly = false,
+  fromBlock?: number | bigint
 ): Promise<Task[]> {
-  const tasks = await getTasksByClient(escrowAddress, provider, clientAddress);
+  const tasks = await getTasksByClient(escrowAddress, provider, clientAddress, fromBlock);
   if (inProgressOnly) return tasks.filter(isInProgress);
   return tasks;
 }
@@ -280,15 +315,18 @@ export async function getAgentCommitments(
   escrowAddress: string,
   provider: Provider,
   agentAddress: string,
-  inProgressOnly = false
+  inProgressOnly = false,
+  fromBlock?: number | bigint
 ): Promise<Task[]> {
-  const tasks = await getTasksByAgent(escrowAddress, provider, agentAddress);
+  const tasks = await getTasksByAgent(escrowAddress, provider, agentAddress, fromBlock);
   if (inProgressOnly) return tasks.filter(isInProgress);
   return tasks;
 }
 
 export interface EscrowTimingConfig {
-  agentResponseWindow: bigint | number;
+  agentResponseWindow?: bigint | number;
+  /** Escrow deployment block - limits eth_getLogs fromBlock on RPCs with 10k block limit */
+  fromBlock?: number | bigint;
 }
 
 export async function getClientTasksNeedingAction(
@@ -298,7 +336,12 @@ export async function getClientTasksNeedingAction(
   blockTimestamp: number | bigint,
   timingConfig?: EscrowTimingConfig
 ): Promise<Task[]> {
-  const tasks = await getTasksByClient(escrowAddress, provider, clientAddress);
+  const tasks = await getTasksByClient(
+    escrowAddress,
+    provider,
+    clientAddress,
+    timingConfig?.fromBlock
+  );
   const agentResponseWindow =
     timingConfig?.agentResponseWindow ??
     (await getEscrowContract(escrowAddress, provider).agentResponseWindow());
@@ -317,9 +360,15 @@ export async function getAgentTasksNeedingAction(
   escrowAddress: string,
   provider: Provider,
   agentAddress: string,
-  blockTimestamp: number | bigint
+  blockTimestamp: number | bigint,
+  options?: { fromBlock?: number | bigint }
 ): Promise<Task[]> {
-  const tasks = await getTasksByAgent(escrowAddress, provider, agentAddress);
+  const tasks = await getTasksByAgent(
+    escrowAddress,
+    provider,
+    agentAddress,
+    options?.fromBlock
+  );
 
   return tasks.filter((task) => {
     if (canAgentSettleNoContest(task, blockTimestamp)) return true;

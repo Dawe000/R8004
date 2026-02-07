@@ -109,7 +109,8 @@ export class AgentSDK {
     const tasks = await getTasksByAgent(
       this.config.escrowAddress,
       provider,
-      address
+      address,
+      this.config.deploymentBlock
     );
     if (inProgressOnly) return tasks.filter(isInProgress);
     return tasks;
@@ -125,7 +126,8 @@ export class AgentSDK {
       this.config.escrowAddress,
       provider,
       address,
-      blockTimestamp
+      blockTimestamp,
+      { fromBlock: this.config.deploymentBlock }
     );
   }
 

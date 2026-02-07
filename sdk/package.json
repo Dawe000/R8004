@@ -19,15 +19,20 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathIgnorePatterns=integration.test --testPathIgnorePatterns=live.test",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js integration.test",
     "test:live": "SDK_LIVE_TESTNET=1 node --experimental-vm-modules node_modules/jest/bin/jest.js live.test",
+    "test:live:flow": "SDK_LIVE_TESTNET=1 SDK_LIVE_RUN_FLOW=path-c,path-d node --experimental-vm-modules node_modules/jest/bin/jest.js live.test",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
     "ethers": "^6.9.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
+    "dotenv": "^17.2.4",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.0",
     "typescript": "^5.0.0"

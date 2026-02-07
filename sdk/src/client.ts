@@ -128,7 +128,8 @@ export class ClientSDK {
     const tasks = await getTasksByClient(
       this.config.escrowAddress,
       provider,
-      address
+      address,
+      this.config.deploymentBlock
     );
     if (inProgressOnly) return tasks.filter(isInProgress);
     return tasks;
@@ -153,7 +154,8 @@ export class ClientSDK {
       this.config.escrowAddress,
       provider,
       address,
-      blockTimestamp
+      blockTimestamp,
+      { fromBlock: this.config.deploymentBlock }
     );
   }
 
