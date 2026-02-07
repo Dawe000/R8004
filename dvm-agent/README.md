@@ -62,4 +62,5 @@ Trigger cron locally: `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"`
 |--------|-------------|
 | `npm run dev` | Local dev with wrangler |
 | `npm run deploy` | Deploy to Cloudflare Workers |
+| `npm run typecheck` | Type check without emit |
 | `npm run test:dispute` | Venice dispute resolution (no chain) |

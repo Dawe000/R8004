@@ -7,7 +7,7 @@ Next.js Web UI for the ERC8001 Agent Task System: task creation, agent matching,
 - Agent search and matching (market maker API)
 - Task creation and configuration
 - Task activity/history view
-- Wagmi + ConnectKit for wallet connection
+- Wagmi + RainbowKit for wallet connection
 - Plasma testnet support
 
 ## Getting Started
@@ -19,7 +19,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Configure RPC and contract addresses in `src/config/constants.ts` and `src/config/wagmi.ts`.
+Contract addresses and RPC (Plasma testnet defaults) are in `src/config/constants.ts`; chain config is in `src/config/wagmi.ts`.
 
 ## Deploy
 

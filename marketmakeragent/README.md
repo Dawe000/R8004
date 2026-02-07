@@ -35,6 +35,22 @@ Match agents to task query
 }
 ```
 
+**Response:**
+```json
+{
+  "query": "Find yield farming opportunities on Base chain",
+  "matchStrategy": "semantic-pinecone-cosine-similarity",
+  "agents": [
+    {
+      "agent": { /* AgentCapabilityCard */ },
+      "score": 0.89,
+      "trustScore": 0.85,
+      "reason": "Excellent capability match with strong trust rating"
+    }
+  ]
+}
+```
+
 ### `POST /api/agents/:agentId/erc8001/dispatch`
 Dispatch an ERC8001-linked task to a selected agent route (testing flow).
 
@@ -56,22 +72,6 @@ Dispatch an ERC8001-linked task to a selected agent route (testing flow).
   "status": "accepted",
   "onchainTaskId": "123",
   "statusUrl": "/1/tasks/uuid"
-}
-```
-
-**Response:**
-```json
-{
-  "query": "Find yield farming opportunities on Base chain",
-  "matchStrategy": "semantic-pinecone-cosine-similarity",
-  "agents": [
-    {
-      "agent": { /* AgentCapabilityCard */ },
-      "score": 0.89,
-      "trustScore": 0.85,
-      "reason": "Excellent capability match with strong trust rating"
-    }
-  ]
 }
 ```
 

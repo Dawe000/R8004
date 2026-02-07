@@ -1,5 +1,7 @@
 # Vision for Intent-Based Tasks
 
+> This document extends the high-level vision with operational detail and sequence diagrams. The canonical high-level vision is **docs/VISION.md**.
+
 ## ERC8001 Agent Task System
 
 We create an ERC8001 intents-based system for agent tasks, with a market maker to accompany it, and UMA to secure it.

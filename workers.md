@@ -1,5 +1,7 @@
 # Deployed Workers
 
+For semantic matching (market maker and example agents), populate Pinecone from repo root with `npm run sync:agent-vectors`; see `exampleagents/README.md` and `marketmakeragent/README.md`.
+
 ## Market Maker Agent
 **URL**: https://market-maker-agent.lynethlabs.workers.dev
 

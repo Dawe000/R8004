@@ -24,8 +24,11 @@ This project implements the ERC8001 Agent Task System—enabling clients to crea
 
 - **Contracts:** `cd contracts && npm install && npm run compile`
 - **SDK:** `npm install @erc8001/agent-task-sdk ethers` – see `sdk/README.md`
+- **Frontend:** `cd frontend && npm install && npm run dev` – see `frontend/README.md`
 - **Plasma testnet flows:** `cd contracts && npm run testnet:flow:path-a`
 - **DVM (dispute resolution):** `cd dvm-agent && npm run deploy` – see `dvm-agent/README.md`
+
+From repo root: `npm run sync:agent-vectors` populates Pinecone for the market maker and example agents (requires `VENICE_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_HOST` in root `.env`; see `exampleagents/README.md` and `marketmakeragent/README.md`).
 
 See each module's README for setup and usage.
 

@@ -66,6 +66,6 @@ npm run testnet:flow:path-d
 
 **Check escalated disputes:** `npm run check:disputes` – lists disputes, UMA liveness status, resolved on-chain.
 
-Add `PINATA_JWT` to `.env` (or sdk/.env) for path-b-uma flows (IPFS uploads).
+Only `path-b-uma-escalate` requires the DVM worker; `path-b-uma-agent` and `path-b-uma-client` use MockOOv3 pushResolution only (no live DVM). Add `PINATA_JWT` to `.env` (or sdk/.env) for path-b-uma flows (IPFS uploads).
 
 See `docs/TECHNICAL_SPEC.md` for interface definitions.
