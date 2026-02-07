@@ -29,6 +29,24 @@ import agentCard27 from './agent-cards/agent-27.json' assert { type: 'json' };
 import agentCard28 from './agent-cards/agent-28.json' assert { type: 'json' };
 import agentCard29 from './agent-cards/agent-29.json' assert { type: 'json' };
 import agentCard30 from './agent-cards/agent-30.json' assert { type: 'json' };
+const TASK_STATUS = {
+  SUBMITTED: 'submitted',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+};
+
+const TASK_CHANNEL = {
+  TASKS: 'tasks',
+  A2A: 'a2a',
+};
+
+const DEFAULT_SYNC_TIMEOUT_MS = 20000;
+const MAX_SYNC_TIMEOUT_MS = 60000;
+const MIN_SYNC_TIMEOUT_MS = 1000;
+const TASK_RETENTION_DAYS = 7;
+const CLEANUP_BATCH_SIZE = 200;
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -78,6 +96,7 @@ export default {
             `/${agentId}/health`,
             `/${agentId}/card`,
             `/${agentId}/tasks`,
+            `/${agentId}/tasks/{taskId}`,
             `/${agentId}/telemetry`,
             `/${agentId}/a2a/tasks`,
             `/${agentId}/a2a/tasks/{taskId}/status`,
@@ -114,11 +133,11 @@ export default {
     }
 
     if (segments[1] === 'tasks') {
-      return handleTasks(request, env, corsHeaders, agent, segments);
+      return handleTasks(request, env, ctx, corsHeaders, agent, segments, url);
     }
 
     if (segments[1] === 'a2a' && segments[2] === 'tasks') {
-      return handleA2ATasks(request, env, corsHeaders, agent, segments);
+      return handleA2ATasks(request, env, ctx, corsHeaders, agent, segments, url);
     }
 
     return jsonResponse(
@@ -127,27 +146,55 @@ export default {
       corsHeaders
     );
   },
+
+  async queue(batch, env, ctx) {
+    for (const message of batch.messages) {
+      try {
+        await processQueuedTaskMessage(message.body, env);
+        if (typeof message.ack === 'function') {
+          message.ack();
+        }
+      } catch (error) {
+        console.error('Queue task processing failed', error);
+        if (typeof message.retry === 'function') {
+          message.retry();
+        } else {
+          throw error;
+        }
+      }
+    }
+  },
+
+  async scheduled(event, env, ctx) {
+    try {
+      const deleted = await cleanupExpiredTasks(env);
+      console.log(`Scheduled cleanup removed ${deleted} expired tasks`);
+    } catch (error) {
+      console.error('Scheduled cleanup failed', error);
+      throw error;
+    }
+  },
 };
 
-async function handleTasks(request, env, corsHeaders, agent, segments) {
+async function handleTasks(request, env, ctx, corsHeaders, agent, segments, url) {
   if (request.method === 'POST' && segments.length === 2) {
-    return createTask(request, env, corsHeaders, agent);
+    return createTask(request, env, ctx, corsHeaders, agent, TASK_CHANNEL.TASKS, url);
   }
 
   if (request.method === 'GET' && segments.length === 3) {
-    const taskId = segments[2];
-    return jsonResponse(
-      {
-        id: taskId,
-        status: 'completed',
-        result: {
-          summary: 'Example task status response.',
-          agentId: agent.id,
-        },
-      },
-      200,
-      corsHeaders
-    );
+    try {
+      const task = await getTaskById(env, segments[2]);
+      if (!task || task.agent_id !== agent.id || task.channel !== TASK_CHANNEL.TASKS) {
+        return jsonResponse({ error: 'Task not found.' }, 404, corsHeaders);
+      }
+      return jsonResponse(formatTaskForClient(task), 200, corsHeaders);
+    } catch (error) {
+      return jsonResponse(
+        { error: error.message || 'Failed to load task status.' },
+        500,
+        corsHeaders
+      );
+    }
   }
 
   return jsonResponse(
@@ -157,35 +204,78 @@ async function handleTasks(request, env, corsHeaders, agent, segments) {
   );
 }
 
-async function handleA2ATasks(request, env, corsHeaders, agent, segments) {
+async function handleA2ATasks(request, env, ctx, corsHeaders, agent, segments, url) {
   if (request.method === 'POST' && segments.length === 3) {
-    return createTask(request, env, corsHeaders, agent);
+    return createTask(request, env, ctx, corsHeaders, agent, TASK_CHANNEL.A2A, url);
   }
 
   if (segments.length === 5 && segments[4] === 'status' && request.method === 'GET') {
-    const taskId = segments[3];
-    return jsonResponse(
-      {
-        taskId: taskId,
-        status: 'completed',
-        agentId: agent.id,
-      },
-      200,
-      corsHeaders
-    );
+    try {
+      const task = await getTaskById(env, segments[3]);
+      if (!task || task.agent_id !== agent.id || task.channel !== TASK_CHANNEL.A2A) {
+        return jsonResponse({ error: 'Task not found.' }, 404, corsHeaders);
+      }
+      return jsonResponse(
+        {
+          taskId: task.id,
+          status: task.status,
+          agentId: task.agent_id,
+          createdAt: task.created_at,
+          startedAt: task.started_at,
+          completedAt: task.completed_at,
+          updatedAt: task.updated_at,
+          error: task.error_message || undefined,
+        },
+        200,
+        corsHeaders
+      );
+    } catch (error) {
+      return jsonResponse(
+        { error: error.message || 'Failed to load A2A task status.' },
+        500,
+        corsHeaders
+      );
+    }
   }
 
   if (segments.length === 5 && segments[4] === 'result' && request.method === 'POST') {
-    const taskId = segments[3];
-    return jsonResponse(
-      {
-        taskId: taskId,
-        status: 'received',
-        message: 'Result accepted by example agent worker.',
-      },
-      200,
-      corsHeaders
-    );
+    try {
+      const taskId = segments[3];
+      const task = await getTaskById(env, taskId);
+      if (!task || task.agent_id !== agent.id || task.channel !== TASK_CHANNEL.A2A) {
+        return jsonResponse({ error: 'Task not found.' }, 404, corsHeaders);
+      }
+
+      const body = await parseRequestBody(request);
+      const now = nowIso();
+      const responseMeta = safeJsonParse(task.response_meta_json) || {};
+      responseMeta.a2aResultSubmittedAt = now;
+      responseMeta.a2aResultSource = 'client';
+
+      await markTaskCompleted(env, {
+        taskId: task.id,
+        result: body,
+        modelUsed: task.model_used || task.model_requested,
+        responseMeta: responseMeta,
+      });
+
+      return jsonResponse(
+        {
+          taskId: task.id,
+          status: TASK_STATUS.COMPLETED,
+          message: 'Result persisted for A2A task.',
+          updatedAt: now,
+        },
+        200,
+        corsHeaders
+      );
+    } catch (error) {
+      return jsonResponse(
+        { error: error.message || 'Failed to persist A2A task result.' },
+        500,
+        corsHeaders
+      );
+    }
   }
 
   return jsonResponse(
@@ -195,39 +285,124 @@ async function handleA2ATasks(request, env, corsHeaders, agent, segments) {
   );
 }
 
-async function createTask(request, env, corsHeaders, agent) {
+async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
+  let taskId = null;
+
   try {
-    const rawBody = await request.text();
-    let body;
-
-    try {
-      body = rawBody ? JSON.parse(rawBody) : {};
-    } catch {
-      body = { input: rawBody };
-    }
-
-    const taskId = crypto.randomUUID();
+    const body = await parseRequestBody(request);
     const input = extractInput(body);
 
     if (!input) {
-      throw new Error('No input provided for task');
+      return jsonResponse({ error: 'No input provided for task.' }, 400, corsHeaders);
     }
 
-    const result = await processAgentTask(agent, body, input, env);
+    const skillId = resolveSkillId(agent, body);
+    const modelRequested = resolveRequestedModel(agent, body, env);
+    const now = nowIso();
+    const forceExpired = isTruthy(url.searchParams.get('forceExpired')) || isTruthy(request.headers.get('x-force-expired'));
+    const expiresAt = forceExpired ? addDaysIso(-1) : addDaysIso(TASK_RETENTION_DAYS);
+    const forceAsync = isTruthy(url.searchParams.get('forceAsync')) || isTruthy(request.headers.get('x-force-async'));
+    const forceFailure = isTruthy(url.searchParams.get('forceFailure')) || isTruthy(request.headers.get('x-force-failure'));
+    const syncTimeoutMs = resolveSyncTimeoutMs(url.searchParams.get('syncTimeoutMs'), env.SYNC_TASK_TIMEOUT_MS);
 
-    return jsonResponse(
-      {
-        id: taskId,
-        status: 'completed',
-        input: input,
-        result: result,
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-      },
-      200,
-      corsHeaders
+    taskId = crypto.randomUUID();
+
+    await insertTask(env, {
+      id: taskId,
+      agentId: agent.id,
+      channel: channel,
+      status: TASK_STATUS.SUBMITTED,
+      requestPayloadJson: JSON.stringify(body ?? {}),
+      inputText: input,
+      skillId: skillId,
+      modelRequested: modelRequested,
+      modelUsed: null,
+      resultJson: null,
+      errorMessage: null,
+      responseMetaJson: JSON.stringify({
+        syncTimeoutMs: syncTimeoutMs,
+        forceAsync: forceAsync,
+        forceFailure: forceFailure,
+        forceExpired: forceExpired,
+      }),
+      createdAt: now,
+      startedAt: null,
+      completedAt: null,
+      updatedAt: now,
+      expiresAt: expiresAt,
+    });
+
+    if (forceAsync) {
+      await markTaskRunning(env, taskId);
+      await enqueueTaskExecution(env, { taskId: taskId, agentId: agent.id, channel: channel, forceFailure: forceFailure });
+      return jsonResponse(
+        formatAsyncAcceptedResponse(taskId, channel, agent.id, now),
+        202,
+        corsHeaders
+      );
+    }
+
+    await markTaskRunning(env, taskId);
+
+    const execution = await runWithTimeout(
+      (signal) =>
+        processAgentTask(agent, body, input, env, {
+          skillId: skillId,
+          modelRequested: modelRequested,
+          signal: signal,
+          forceFailure: forceFailure,
+        }),
+      syncTimeoutMs
     );
+
+    await markTaskCompleted(env, {
+      taskId: taskId,
+      result: execution,
+      modelUsed: execution?.model || modelRequested,
+      responseMeta: execution?.responseMeta || null,
+    });
+
+    const completedTask = await getTaskById(env, taskId);
+    return jsonResponse(formatTaskForClient(completedTask), 200, corsHeaders);
   } catch (error) {
+    if (error instanceof SyncTimeoutError && taskId) {
+      try {
+        await enqueueTaskExecution(env, {
+          taskId: taskId,
+          agentId: agent.id,
+          channel: channel,
+          forceFailure: false,
+        });
+        const submittedTask = await getTaskById(env, taskId);
+        return jsonResponse(
+          formatAsyncAcceptedResponse(
+            taskId,
+            channel,
+            agent.id,
+            submittedTask?.created_at || nowIso()
+          ),
+          202,
+          corsHeaders
+        );
+      } catch (enqueueError) {
+        await safeMarkTaskFailed(env, taskId, enqueueError.message || 'Failed to enqueue task execution.');
+        return jsonResponse(
+          { id: taskId, status: TASK_STATUS.FAILED, error: enqueueError.message || 'Task queue enqueue failed.' },
+          500,
+          corsHeaders
+        );
+      }
+    }
+
+    if (taskId) {
+      await safeMarkTaskFailed(env, taskId, error.message || 'Task creation failed.');
+      return jsonResponse(
+        { id: taskId, status: TASK_STATUS.FAILED, error: error.message || 'Task creation failed.' },
+        500,
+        corsHeaders
+      );
+    }
+
     return jsonResponse(
       { error: error.message || 'Task creation failed.' },
       500,
@@ -262,8 +437,13 @@ function extractInput(body) {
   return String(input || '').trim();
 }
 
-async function processAgentTask(agent, body, inputText, env) {
+async function processAgentTask(agent, body, inputText, env, options = {}) {
+  if (options.forceFailure) {
+    throw new Error('Forced Venice failure for testing.');
+  }
+
   const skillId =
+    options.skillId ??
     body?.task?.skill ??
     body?.skill ??
     body?.task?.capabilityId ??
@@ -274,13 +454,7 @@ async function processAgentTask(agent, body, inputText, env) {
   const systemPrompt = skill.systemPrompt;
   const userPrompt = `${skill.userPrompt}\n\n${inputText}`;
 
-  const model =
-    body?.task?.model ||
-    body?.model ||
-    agent.model ||
-    (agent.modelEnv ? env[agent.modelEnv] : undefined) ||
-    env.VENICE_MODEL ||
-    'zai-org-glm-4.7';
+  const model = options.modelRequested || resolveRequestedModel(agent, body, env);
   const apiKey = env.VENICE_API_KEY;
 
   if (!apiKey) {
@@ -325,7 +499,7 @@ async function processAgentTask(agent, body, inputText, env) {
       temperature: attempt.temperature,
     });
 
-    const data = await callVenice(requestBody, apiKey);
+    const data = await callVenice(requestBody, apiKey, options.signal);
     const message = data?.choices?.[0]?.message || {};
     const content = extractVeniceContent(message);
     const cleaned = stripCodeFences(content);
@@ -392,7 +566,7 @@ function buildVeniceRequestBody({
   };
 }
 
-async function callVenice(requestBody, apiKey) {
+async function callVenice(requestBody, apiKey, signal) {
   const response = await fetch('https://api.venice.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -400,6 +574,7 @@ async function callVenice(requestBody, apiKey) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestBody),
+    signal: signal,
   });
 
   if (!response.ok) {
@@ -456,6 +631,346 @@ function jsonResponse(payload, status, corsHeaders) {
       'Content-Type': 'application/json',
     },
   });
+}
+
+function formatAsyncAcceptedResponse(taskId, channel, agentId, createdAt) {
+  return {
+    id: taskId,
+    status: TASK_STATUS.RUNNING,
+    createdAt: createdAt,
+    statusUrl:
+      channel === TASK_CHANNEL.A2A
+        ? `/${agentId}/a2a/tasks/${taskId}/status`
+        : `/${agentId}/tasks/${taskId}`,
+    pollAfterMs: 2000,
+  };
+}
+
+function formatTaskForClient(task) {
+  if (!task) {
+    return null;
+  }
+
+  return {
+    id: task.id,
+    status: task.status,
+    agentId: task.agent_id,
+    channel: task.channel,
+    input: task.input_text,
+    result: safeJsonParse(task.result_json),
+    error: task.error_message || undefined,
+    skillId: task.skill_id || undefined,
+    modelRequested: task.model_requested || undefined,
+    modelUsed: task.model_used || undefined,
+    createdAt: task.created_at,
+    startedAt: task.started_at || undefined,
+    completedAt: task.completed_at || undefined,
+    updatedAt: task.updated_at,
+    expiresAt: task.expires_at,
+    responseMeta: safeJsonParse(task.response_meta_json),
+  };
+}
+
+async function processQueuedTaskMessage(rawMessageBody, env) {
+  const payload =
+    typeof rawMessageBody === 'string'
+      ? safeJsonParse(rawMessageBody) || {}
+      : rawMessageBody || {};
+
+  const taskId = payload.taskId;
+  if (!taskId) {
+    throw new Error('Queue message missing taskId');
+  }
+
+  const task = await getTaskById(env, taskId);
+  if (!task) {
+    return;
+  }
+
+  if (task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.FAILED) {
+    return;
+  }
+
+  await markTaskRunning(env, task.id);
+
+  const agent = AGENTS[task.agent_id];
+  if (!agent) {
+    await markTaskFailed(env, task.id, `Unknown agent id: ${task.agent_id}`);
+    return;
+  }
+
+  const body = safeJsonParse(task.request_payload_json) || {};
+
+  try {
+    const result = await processAgentTask(agent, body, task.input_text, env, {
+      skillId: task.skill_id || undefined,
+      modelRequested: task.model_requested || undefined,
+      forceFailure: Boolean(payload.forceFailure),
+    });
+
+    await markTaskCompleted(env, {
+      taskId: task.id,
+      result: result,
+      modelUsed: result?.model || task.model_requested,
+      responseMeta: result?.responseMeta || null,
+    });
+  } catch (error) {
+    await markTaskFailed(env, task.id, error.message || 'Queued task execution failed.');
+    throw error;
+  }
+}
+
+async function enqueueTaskExecution(env, payload) {
+  if (!env.TASK_EXEC_QUEUE || typeof env.TASK_EXEC_QUEUE.send !== 'function') {
+    throw new Error('Missing TASK_EXEC_QUEUE binding in environment.');
+  }
+  await env.TASK_EXEC_QUEUE.send(payload);
+}
+
+function resolveSkillId(agent, body) {
+  const requestedSkill =
+    body?.task?.skill ??
+    body?.skill ??
+    body?.task?.capabilityId ??
+    body?.capabilityId;
+  const found = agent.skills.find((entry) => entry.id === requestedSkill);
+  return (found || agent.skills[0]).id;
+}
+
+function resolveRequestedModel(agent, body, env) {
+  return (
+    body?.task?.model ||
+    body?.model ||
+    agent.model ||
+    (agent.modelEnv ? env[agent.modelEnv] : undefined) ||
+    env.VENICE_MODEL ||
+    'zai-org-glm-4.7'
+  );
+}
+
+function resolveSyncTimeoutMs(queryValue, envValue) {
+  const candidate = Number(queryValue || envValue || DEFAULT_SYNC_TIMEOUT_MS);
+  if (!Number.isFinite(candidate)) {
+    return DEFAULT_SYNC_TIMEOUT_MS;
+  }
+  return Math.max(MIN_SYNC_TIMEOUT_MS, Math.min(MAX_SYNC_TIMEOUT_MS, Math.floor(candidate)));
+}
+
+function isTruthy(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
+async function parseRequestBody(request) {
+  const rawBody = await request.text();
+
+  if (!rawBody) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    return { input: rawBody };
+  }
+}
+
+async function runWithTimeout(taskFn, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort('sync-timeout');
+  }, timeoutMs);
+
+  try {
+    return await taskFn(controller.signal);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new SyncTimeoutError(`Synchronous timeout exceeded ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function isAbortError(error) {
+  return (
+    error?.name === 'AbortError' ||
+    error?.message === 'The operation was aborted.' ||
+    String(error?.message || '').toLowerCase().includes('aborted')
+  );
+}
+
+class SyncTimeoutError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SyncTimeoutError';
+  }
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function addDaysIso(days) {
+  const now = Date.now();
+  return new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function safeJsonParse(value) {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function requireDb(env) {
+  if (!env.DB) {
+    throw new Error('Missing DB binding in environment.');
+  }
+  return env.DB;
+}
+
+async function insertTask(env, task) {
+  const db = requireDb(env);
+  await db
+    .prepare(
+      `
+        INSERT INTO tasks (
+          id, agent_id, channel, status, request_payload_json, input_text, skill_id,
+          model_requested, model_used, result_json, error_message, response_meta_json,
+          created_at, started_at, completed_at, updated_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+    )
+    .bind(
+      task.id,
+      task.agentId,
+      task.channel,
+      task.status,
+      task.requestPayloadJson,
+      task.inputText,
+      task.skillId,
+      task.modelRequested,
+      task.modelUsed,
+      task.resultJson,
+      task.errorMessage,
+      task.responseMetaJson,
+      task.createdAt,
+      task.startedAt,
+      task.completedAt,
+      task.updatedAt,
+      task.expiresAt
+    )
+    .run();
+}
+
+async function markTaskRunning(env, taskId) {
+  const db = requireDb(env);
+  const now = nowIso();
+  await db
+    .prepare(
+      `
+        UPDATE tasks
+        SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ?, error_message = NULL
+        WHERE id = ?
+      `
+    )
+    .bind(TASK_STATUS.RUNNING, now, now, taskId)
+    .run();
+}
+
+async function markTaskCompleted(env, { taskId, result, modelUsed, responseMeta }) {
+  const db = requireDb(env);
+  const now = nowIso();
+  await db
+    .prepare(
+      `
+        UPDATE tasks
+        SET status = ?, result_json = ?, error_message = NULL, model_used = ?, response_meta_json = ?,
+            completed_at = ?, updated_at = ?
+        WHERE id = ?
+      `
+    )
+    .bind(
+      TASK_STATUS.COMPLETED,
+      JSON.stringify(result ?? null),
+      modelUsed || null,
+      JSON.stringify(responseMeta ?? null),
+      now,
+      now,
+      taskId
+    )
+    .run();
+}
+
+async function markTaskFailed(env, taskId, errorMessage) {
+  const db = requireDb(env);
+  const now = nowIso();
+  await db
+    .prepare(
+      `
+        UPDATE tasks
+        SET status = ?, error_message = ?, updated_at = ?, completed_at = COALESCE(completed_at, ?)
+        WHERE id = ?
+      `
+    )
+    .bind(TASK_STATUS.FAILED, String(errorMessage || 'Unknown task failure'), now, now, taskId)
+    .run();
+}
+
+async function safeMarkTaskFailed(env, taskId, errorMessage) {
+  try {
+    await markTaskFailed(env, taskId, errorMessage);
+  } catch (persistError) {
+    console.error('Failed to persist task failure state', persistError);
+  }
+}
+
+async function getTaskById(env, taskId) {
+  const db = requireDb(env);
+  return db
+    .prepare('SELECT * FROM tasks WHERE id = ? LIMIT 1')
+    .bind(taskId)
+    .first();
+}
+
+async function cleanupExpiredTasks(env) {
+  const db = requireDb(env);
+  const now = nowIso();
+  let deletedTotal = 0;
+
+  while (true) {
+    const result = await db
+      .prepare(
+        `
+          DELETE FROM tasks
+          WHERE id IN (
+            SELECT id FROM tasks
+            WHERE expires_at < ?
+            ORDER BY expires_at ASC
+            LIMIT ?
+          )
+        `
+      )
+      .bind(now, CLEANUP_BATCH_SIZE)
+      .run();
+
+    const deleted = Number(result?.meta?.changes || 0);
+    deletedTotal += deleted;
+    if (deleted < CLEANUP_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return deletedTotal;
 }
 
 const AGENT_CARDS = {

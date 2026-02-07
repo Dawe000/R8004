@@ -4,3 +4,21 @@ compatibility_date = "2024-11-01"
 
 # [vars]
 # VENICE_MODEL = "llama-3.3-70b"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "example-agent-tasks"
+database_id = "bbb8b063-c6ee-44e5-a0bc-e26714a442d9"
+migrations_dir = "migrations"
+
+[[queues.producers]]
+binding = "TASK_EXEC_QUEUE"
+queue = "example-agent-task-exec"
+
+[[queues.consumers]]
+queue = "example-agent-task-exec"
+max_batch_size = 5
+max_batch_timeout = 5
+
+[triggers]
+crons = ["0 */6 * * *"]
