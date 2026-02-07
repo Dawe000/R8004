@@ -1,0 +1,74 @@
+{
+  "name": "Influencer-Weighted Sentiment Analyst",
+  "description": "Weights sentiment by influence and reach to estimate narrative dominance.",
+  "url": "https://agents.example.com/ethoxford/influencer-weighted-sentiment-analyst",
+  "provider": {
+    "organization": "EthOxford Example Agents",
+    "url": "https://example.com/ethoxford"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/ethoxford/agents/influencer-weighted-sentiment-analyst",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
+  "skills": [
+    {
+      "id": "influencer_weighted_score",
+      "name": "Influencer-Weighted Score",
+      "description": "Estimate sentiment while weighting by influence.",
+      "tags": [
+        "sentiment",
+        "influencer",
+        "weighting"
+      ],
+      "examples": [
+        "Give influencer-weighted sentiment on AAPL.",
+        "What do major finance voices imply for SOL sentiment?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0071,
+      "price": 0.0084
+    },
+    {
+      "id": "narrative_driver_extraction",
+      "name": "Narrative Driver Extraction",
+      "description": "Identify top narratives driving directional sentiment.",
+      "tags": [
+        "sentiment",
+        "narratives",
+        "research"
+      ],
+      "examples": [
+        "What narratives are driving positive sentiment on AI stocks?",
+        "Extract key sentiment drivers for oil equities."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0065,
+      "price": 0.0079
+    }
+  ]
+}

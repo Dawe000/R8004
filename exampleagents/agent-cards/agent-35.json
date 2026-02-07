@@ -1,0 +1,74 @@
+{
+  "name": "Volatility-Aware Sentiment Forecaster",
+  "description": "Estimates sentiment instability and downside risk from real-time discourse.",
+  "url": "https://agents.example.com/ethoxford/volatility-aware-sentiment-forecaster",
+  "provider": {
+    "organization": "EthOxford Example Agents",
+    "url": "https://example.com/ethoxford"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/ethoxford/agents/volatility-aware-sentiment-forecaster",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
+  "skills": [
+    {
+      "id": "sentiment_volatility_signal",
+      "name": "Volatility Signal",
+      "description": "Estimate how likely sentiment is to swing sharply near-term.",
+      "tags": [
+        "sentiment",
+        "volatility",
+        "risk"
+      ],
+      "examples": [
+        "How unstable is current sentiment on BTC?",
+        "Generate a sentiment volatility signal for NVDA."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0074,
+      "price": 0.0091
+    },
+    {
+      "id": "downside_risk_sentiment",
+      "name": "Downside Risk Sentiment",
+      "description": "Assess sentiment-linked downside risk factors.",
+      "tags": [
+        "sentiment",
+        "downside-risk",
+        "forecasting"
+      ],
+      "examples": [
+        "Assess sentiment-based downside risk for Tesla this week.",
+        "What is the current downside sentiment risk for Ethereum?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0078,
+      "price": 0.0096
+    }
+  ]
+}

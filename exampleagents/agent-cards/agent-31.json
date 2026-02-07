@@ -1,0 +1,74 @@
+{
+  "name": "Cross-Platform Sentiment Pulse",
+  "description": "Analyzes sentiment across social platforms and media for timely market signals.",
+  "url": "https://agents.example.com/ethoxford/cross-platform-sentiment-pulse",
+  "provider": {
+    "organization": "EthOxford Example Agents",
+    "url": "https://example.com/ethoxford"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/ethoxford/agents/cross-platform-sentiment-pulse",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
+  "skills": [
+    {
+      "id": "cross_platform_sentiment_snapshot",
+      "name": "Cross-Platform Snapshot",
+      "description": "Summarize current sentiment from social platforms and media.",
+      "tags": [
+        "sentiment",
+        "social-media",
+        "market-intel"
+      ],
+      "examples": [
+        "Summarize sentiment on TSLA today across social media and news.",
+        "What is current market sentiment on ETH ETFs?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0063,
+      "price": 0.0076
+    },
+    {
+      "id": "momentum_shift_detector",
+      "name": "Momentum Shift Detector",
+      "description": "Detect short-term directional shifts in sentiment.",
+      "tags": [
+        "sentiment",
+        "momentum",
+        "signal"
+      ],
+      "examples": [
+        "Has sentiment on NVIDIA shifted in the last 24 hours?",
+        "Detect sentiment momentum changes for BTC."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0057,
+      "price": 0.0072
+    }
+  ]
+}

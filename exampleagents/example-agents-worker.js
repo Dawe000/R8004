@@ -1,4 +1,4 @@
-// Multi-agent Cloudflare Worker for ERC8001 example agents (routes /1 through /30)
+// Multi-agent Cloudflare Worker for ERC8001 example agents (routes /1 through /35)
 import agentCard1 from './agent-cards/agent-1.json' assert { type: 'json' };
 import agentCard2 from './agent-cards/agent-2.json' assert { type: 'json' };
 import agentCard3 from './agent-cards/agent-3.json' assert { type: 'json' };
@@ -29,6 +29,11 @@ import agentCard27 from './agent-cards/agent-27.json' assert { type: 'json' };
 import agentCard28 from './agent-cards/agent-28.json' assert { type: 'json' };
 import agentCard29 from './agent-cards/agent-29.json' assert { type: 'json' };
 import agentCard30 from './agent-cards/agent-30.json' assert { type: 'json' };
+import agentCard31 from './agent-cards/agent-31.json' assert { type: 'json' };
+import agentCard32 from './agent-cards/agent-32.json' assert { type: 'json' };
+import agentCard33 from './agent-cards/agent-33.json' assert { type: 'json' };
+import agentCard34 from './agent-cards/agent-34.json' assert { type: 'json' };
+import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
 const TASK_STATUS = {
   SUBMITTED: 'submitted',
   RUNNING: 'running',
@@ -1004,6 +1009,11 @@ const AGENT_CARDS = {
   '28': agentCard28,
   '29': agentCard29,
   '30': agentCard30,
+  '31': agentCard31,
+  '32': agentCard32,
+  '33': agentCard33,
+  '34': agentCard34,
+  '35': agentCard35,
 };
 
 const AGENTS = {
@@ -1192,6 +1202,121 @@ const AGENTS = {
         systemPrompt:
           'You analyze policy gaps. Return JSON with keys: gaps (array of {gap,risk,mitigation}), summary.',
         userPrompt: 'Analyze this policy or procedure for gaps:',
+      },
+    ],
+  },
+  '31': {
+    id: '31',
+    modelEnv: 'VENICE_MODEL_SENTIMENT_31',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
+    skills: [
+      {
+        id: 'cross_platform_sentiment_snapshot',
+        systemPrompt:
+          'You are a cross-platform sentiment analyst. Use web search and scraping to combine social posts, blogs, and financial media sentiment. Return strict JSON with keys: topic, sentiment {label, score}, platformBreakdown (array of {platform, sentiment, confidence}), summary, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Create a cross-platform sentiment snapshot for:',
+      },
+      {
+        id: 'momentum_shift_detector',
+        systemPrompt:
+          'You detect short-term sentiment momentum shifts. Use web search and scraping to compare fresh sentiment against prior baseline. Return strict JSON with keys: topic, momentum {direction, strength}, leadingSignals (array), summary, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Detect sentiment momentum shifts for:',
+      },
+    ],
+  },
+  '32': {
+    id: '32',
+    modelEnv: 'VENICE_MODEL_SENTIMENT_32',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
+    skills: [
+      {
+        id: 'influencer_weighted_score',
+        systemPrompt:
+          'You are an influencer-weighted sentiment analyst. Use web search and scraping to identify influential voices and weight sentiment by reach and credibility. Return strict JSON with keys: topic, weightedSentiment {label, score}, keyVoices (array of {name, stance, influenceEstimate}), summary, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Analyze influencer-weighted sentiment for:',
+      },
+      {
+        id: 'narrative_driver_extraction',
+        systemPrompt:
+          'You extract dominant narratives driving sentiment. Use web search and scraping and return strict JSON with keys: topic, narratives (array of {narrative, sentimentImpact, evidence}), summary, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Extract sentiment narrative drivers for:',
+      },
+    ],
+  },
+  '33': {
+    id: '33',
+    modelEnv: 'VENICE_MODEL_SENTIMENT_33',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
+    skills: [
+      {
+        id: 'news_social_divergence_score',
+        systemPrompt:
+          'You compare media sentiment and social sentiment. Use web search and scraping to compute divergence and likely implications. Return strict JSON with keys: topic, divergenceScore, mediaSentiment, socialSentiment, interpretation, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Compare media vs social sentiment for:',
+      },
+      {
+        id: 'consensus_breakdown',
+        systemPrompt:
+          'You summarize where consensus exists and where views split. Use web search and scraping and return strict JSON with keys: topic, consensusPoints (array), disagreementPoints (array), confidence, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Provide a sentiment consensus breakdown for:',
+      },
+    ],
+  },
+  '34': {
+    id: '34',
+    modelEnv: 'VENICE_MODEL_SENTIMENT_34',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
+    skills: [
+      {
+        id: 'retail_crowd_bull_bear_ratio',
+        systemPrompt:
+          'You estimate retail crowd sentiment from public discussion signals. Use web search and scraping. Return strict JSON with keys: topic, bullBearRatio, sentiment {label, score}, retailSignals (array), asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Estimate retail crowd sentiment for:',
+      },
+      {
+        id: 'catalyst_sentiment_timeline',
+        systemPrompt:
+          'You build a catalyst-linked sentiment timeline. Use web search and scraping and return strict JSON with keys: topic, timeline (array of {time, catalyst, sentiment}), summary, asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Build a catalyst sentiment timeline for:',
+      },
+    ],
+  },
+  '35': {
+    id: '35',
+    modelEnv: 'VENICE_MODEL_SENTIMENT_35',
+    veniceParameters: {
+      enable_web_search: 'on',
+      enable_web_scraping: true,
+      include_venice_system_prompt: false,
+    },
+    skills: [
+      {
+        id: 'sentiment_volatility_signal',
+        systemPrompt:
+          'You are a volatility-aware sentiment forecaster. Use web search and scraping to estimate sentiment stability and near-term risk of sharp swings. Return strict JSON with keys: topic, currentSentiment, volatilitySignal {level, rationale}, scenarios (array), asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Generate a sentiment volatility signal for:',
+      },
+      {
+        id: 'downside_risk_sentiment',
+        systemPrompt:
+          'You identify sentiment-based downside risks. Use web search and scraping and return strict JSON with keys: topic, downsideRiskScore, riskDrivers (array), mitigationSignals (array), asOf (ISO timestamp), and sources (array of {title,url}).',
+        userPrompt: 'Assess downside sentiment risk for:',
       },
     ],
   },

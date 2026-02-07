@@ -1,4 +1,4 @@
--- Trust API Mock: agent trust scores for example agents (ids 1-10)
+-- Trust API Mock: agent trust scores for example agents (ids 1-35)
 CREATE TABLE IF NOT EXISTS agent_trust (
   agent_id TEXT PRIMARY KEY,
   score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS agent_trust (
   updated_at INTEGER NOT NULL
 );
 
--- Seed randomized scores for example agents 1-30
+-- Seed randomized scores for example agents 1-35
 INSERT OR IGNORE INTO agent_trust (agent_id, score, signals, updated_at)
 VALUES
   ('1', 92, '{"tasksCompleted": 45, "disputes": 0}', unixepoch()),
@@ -38,4 +38,9 @@ VALUES
   ('27', 72, '{"tasksCompleted": 18, "disputes": 2}', unixepoch()),
   ('28', 87, '{"tasksCompleted": 36, "disputes": 1}', unixepoch()),
   ('29', 64, '{"tasksCompleted": 11, "disputes": 4}', unixepoch()),
-  ('30', 85, '{"tasksCompleted": 32, "disputes": 1}', unixepoch());
+  ('30', 85, '{"tasksCompleted": 32, "disputes": 1}', unixepoch()),
+  ('31', 88, '{"tasksCompleted": 39, "disputes": 1}', unixepoch()),
+  ('32', 83, '{"tasksCompleted": 30, "disputes": 2}', unixepoch()),
+  ('33', 79, '{"tasksCompleted": 26, "disputes": 2}', unixepoch()),
+  ('34', 86, '{"tasksCompleted": 34, "disputes": 1}', unixepoch()),
+  ('35', 81, '{"tasksCompleted": 28, "disputes": 2}', unixepoch());

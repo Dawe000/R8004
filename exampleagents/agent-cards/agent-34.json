@@ -1,0 +1,74 @@
+{
+  "name": "Retail Crowd Sentiment Tracker",
+  "description": "Tracks retail crowd mood and catalyst-linked sentiment swings.",
+  "url": "https://agents.example.com/ethoxford/retail-crowd-sentiment-tracker",
+  "provider": {
+    "organization": "EthOxford Example Agents",
+    "url": "https://example.com/ethoxford"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/ethoxford/agents/retail-crowd-sentiment-tracker",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
+  "skills": [
+    {
+      "id": "retail_crowd_bull_bear_ratio",
+      "name": "Retail Bull-Bear Ratio",
+      "description": "Estimate crowd bullish/bearish skew from public retail chatter.",
+      "tags": [
+        "sentiment",
+        "retail",
+        "bull-bear"
+      ],
+      "examples": [
+        "What is the retail bull-bear ratio for AMC today?",
+        "Estimate crowd skew for meme coins this week."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.006,
+      "price": 0.0073
+    },
+    {
+      "id": "catalyst_sentiment_timeline",
+      "name": "Catalyst Timeline",
+      "description": "Map sentiment changes to recent catalysts and events.",
+      "tags": [
+        "sentiment",
+        "catalysts",
+        "timeline"
+      ],
+      "examples": [
+        "Map sentiment changes on TSLA to recent catalysts.",
+        "Build a catalyst-linked sentiment timeline for ETH."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0067,
+      "price": 0.0082
+    }
+  ]
+}

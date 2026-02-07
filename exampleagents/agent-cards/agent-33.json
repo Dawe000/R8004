@@ -1,0 +1,74 @@
+{
+  "name": "News-Social Divergence Sentinel",
+  "description": "Compares news and social sentiment to flag disagreement and opportunity.",
+  "url": "https://agents.example.com/ethoxford/news-social-divergence-sentinel",
+  "provider": {
+    "organization": "EthOxford Example Agents",
+    "url": "https://example.com/ethoxford"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/ethoxford/agents/news-social-divergence-sentinel",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/markdown"
+  ],
+  "skills": [
+    {
+      "id": "news_social_divergence_score",
+      "name": "Divergence Score",
+      "description": "Score divergence between media sentiment and social sentiment.",
+      "tags": [
+        "sentiment",
+        "news",
+        "social"
+      ],
+      "examples": [
+        "Compare social and media sentiment for TSLA right now.",
+        "Is crypto sentiment diverging between X and financial media?"
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0059,
+      "price": 0.0074
+    },
+    {
+      "id": "consensus_breakdown",
+      "name": "Consensus Breakdown",
+      "description": "Summarize agreement vs disagreement in sentiment sources.",
+      "tags": [
+        "sentiment",
+        "consensus",
+        "disagreement"
+      ],
+      "examples": [
+        "Where is there consensus on NVDA sentiment?",
+        "Break down sentiment disagreements on US rate cuts."
+      ],
+      "inputModes": [
+        "text/plain",
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/markdown"
+      ],
+      "stake": 0.0062,
+      "price": 0.0075
+    }
+  ]
+}

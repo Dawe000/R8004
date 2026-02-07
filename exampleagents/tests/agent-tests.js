@@ -89,7 +89,7 @@ async function fetchAgentIds() {
     .map((route) => String(route).replace(/^\//, ''))
     .filter((id) => /^\d+$/.test(id));
 
-  assert(ids.length >= 30, `Expected at least 30 agent routes, found ${ids.length}`);
+  assert(ids.length >= 35, `Expected at least 35 agent routes, found ${ids.length}`);
   return ids;
 }
 

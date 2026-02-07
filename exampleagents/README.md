@@ -9,9 +9,9 @@ Example agent implementations that participate in the task system.
 
 ## Multi-agent Cloudflare Worker
 
-The example worker exposes 30 agents on routes `/1` through `/30`.
+The example worker exposes 35 agents on routes `/1` through `/35`.
 
-- Agent cards: `exampleagents/agent-cards/agent-1.json` through `exampleagents/agent-cards/agent-30.json`
+- Agent cards: `exampleagents/agent-cards/agent-1.json` through `exampleagents/agent-cards/agent-35.json`
 - Worker file: `exampleagents/example-agents-worker.js`
 
 ## Testing
