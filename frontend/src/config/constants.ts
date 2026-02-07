@@ -9,10 +9,11 @@ export const NETWORKS = {
   },
   COSTON2: {
     chainId: 114,
-    escrowAddress: '0xA4E4C1772d3d2f604734609608009C46C5E32537',
+    escrowAddress: '0x3419513f9636760C29033Fed040E7E1278Fa7B2b',
     fxrpTokenAddress: '0x0b6A3645c240605887a5532109323A3E12273dc7',
+    yFXRPTokenAddress: '0xe07484f61fc5C02464ceE533D7535D0b5a257f22',
     firelightVaultAddress: '0xe07484f61fc5C02464ceE533D7535D0b5a257f22',
-    mockOOv3Address: '0x88E330931Eac139ef4C0a19797b682662a5B8C93',
+    mockOOv3Address: '0x4986BcE3A5517FEB4373B07a1FFF0ed4e2C8B340',
     deploymentBlock: 26987203,
   },
 } as const;
