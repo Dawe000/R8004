@@ -1,4 +1,5 @@
 import { keccak256, toUtf8Bytes, getBytes } from "ethers";
+<<<<<<< HEAD
 import type { IpfsConfig } from "./config.js";
 import { DEFAULT_IPFS_URI_SCHEME } from "./config.js";
 import type { Task } from "./types.js";
