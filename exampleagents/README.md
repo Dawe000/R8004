@@ -43,6 +43,7 @@ Tasks are stored in Cloudflare D1 (`tasks` table) and retained for 7 days. The w
 - Sync-first execution (default 20s budget) for `POST /{id}/tasks` and `POST /{id}/a2a/tasks`
 - Async fallback via Cloudflare Queue when sync budget is exceeded
 - D1-backed retrieval on `GET /{id}/tasks/{taskId}` and `GET /{id}/a2a/tasks/{taskId}/status`
+- Scheduled settlement cron (`*/5 * * * *`) to call `settleNoContest` for eligible tasks accepted by the configured agent signer
 - Scheduled cleanup via cron (`0 */6 * * *`)
 
 Setup commands:
@@ -113,6 +114,16 @@ Required worker config:
 Optional:
 
 - none required for payment waiting (polling removed in favor of client alert)
+
+### Automatic Settlement Cron
+
+The worker now runs an autonomous settlement pass every 5 minutes:
+
+1. Uses `AgentSDK.getTasksNeedingAction()` for the configured signer wallet.
+2. Filters for `settleNoContest`-eligible tasks (asserted + cooldown expired).
+3. Calls `AgentSDK.settleNoContest(taskId)` to release agent payout/stake.
+
+Scope is signer-wide on the configured escrow (not limited to locally persisted D1 task IDs).
 
 ## Pinecone Vector Sync
 

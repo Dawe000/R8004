@@ -23,6 +23,7 @@ This integration uses direct frontend-to-agent execution handoff while keeping m
 8. Agent verifies `paymentDeposited(taskId)` and resolves task input from on-chain `descriptionURI` (IPFS fetch).
 9. Agent executes, stores result in D1, then calls `assertCompletion(..., resultURI)`.
 10. Frontend polls chain and fetches result from on-chain `resultURI`.
+11. Example-agent settlement cron (`*/5 * * * *`) automatically calls `settleNoContest` after cooldown when eligible.
 
 ## 3) Component changes
 

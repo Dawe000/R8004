@@ -36,6 +36,7 @@ import agentCard34 from './agent-cards/agent-34.json' assert { type: 'json' };
 import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
 import { AgentSDK } from '../sdk/src/agent.ts';
 import { fetchTaskSpecFromOnchainUri } from '../sdk/src/taskSpec.ts';
+import { getAgentTaskAction } from '../sdk/src/tasks.ts';
 import { JsonRpcProvider, Wallet } from '../sdk/node_modules/ethers/lib.esm/index.js';
 const TASK_STATUS = {
   SUBMITTED: 'submitted',
@@ -58,6 +59,8 @@ const PENDING_TASK_LOOKUP_LIMIT = 500;
 const DEFAULT_ERC8001_CHAIN_ID = 9746;
 const DEFAULT_ERC8001_RPC_URL = 'https://testnet-rpc.plasma.to';
 const DEFAULT_ERC8001_ESCROW_ADDRESS = '0x2E24A0a838Fa71765A00CB9528B6C378D8437D53';
+const SETTLEMENT_CRON = '*/5 * * * *';
+const CLEANUP_CRON = '0 */6 * * *';
 
 export default {
   async fetch(request, env, ctx) {
@@ -189,15 +192,50 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    await runScheduledCron(event, env);
+  },
+};
+
+export async function runScheduledCron(event, env, deps = {}) {
+  const runScheduledSettlementsFn =
+    deps.runScheduledSettlementsFn || runScheduledSettlements;
+  const cleanupExpiredTasksFn = deps.cleanupExpiredTasksFn || cleanupExpiredTasks;
+  const cron = typeof event?.cron === 'string' ? event.cron : '';
+
+  if (cron === CLEANUP_CRON) {
     try {
-      const deleted = await cleanupExpiredTasks(env);
+      const deleted = await cleanupExpiredTasksFn(env);
       console.log(`Scheduled cleanup removed ${deleted} expired tasks`);
+      return {
+        mode: 'cleanup',
+        deleted,
+      };
     } catch (error) {
       console.error('Scheduled cleanup failed', error);
       throw error;
     }
-  },
-};
+  }
+
+  if (cron && cron !== SETTLEMENT_CRON) {
+    console.log(
+      `Scheduled cron "${cron}" is not explicitly configured; defaulting to settlement mode.`
+    );
+  }
+
+  const summary = await runScheduledSettlementsFn(env);
+  console.log(
+    `Scheduled settlement run complete. checked=${summary.checked} eligible=${summary.eligible} settled=${summary.settled} failed=${summary.failed} skipped=${summary.skipped}`
+  );
+  if (summary.failedTasks.length > 0) {
+    console.log(
+      `Scheduled settlement failures: ${JSON.stringify(summary.failedTasks)}`
+    );
+  }
+  return {
+    mode: 'settlement',
+    summary,
+  };
+}
 
 async function handleTasks(request, env, ctx, corsHeaders, agent, segments, url) {
   if (request.method === 'POST' && segments.length === 2) {
@@ -1166,6 +1204,7 @@ async function getErc8001Sdk(env) {
           escrowAddress,
           chainId,
           rpcUrl,
+          ...(deploymentBlock !== undefined ? { deploymentBlock } : {}),
           ipfs: { provider: 'mock', uriScheme: 'ipfs' },
         },
         wallet
@@ -1181,6 +1220,62 @@ async function getErc8001Sdk(env) {
     })();
   }
   return erc8001SdkPromise;
+}
+
+async function runScheduledSettlements(env) {
+  const { sdk, address, provider } = await getErc8001Sdk(env);
+  return runScheduledSettlementsWithSdk({
+    sdk,
+    address,
+    provider,
+  });
+}
+
+export async function runScheduledSettlementsWithSdk({
+  sdk,
+  address,
+  provider,
+  logger = console,
+}) {
+  const latestBlock = await provider.getBlock('latest');
+  const blockTimestamp = BigInt(
+    latestBlock?.timestamp ?? Math.floor(Date.now() / 1000)
+  );
+  const tasks = await sdk.getTasksNeedingAction();
+  const summary = {
+    checked: tasks.length,
+    eligible: 0,
+    settled: 0,
+    failed: 0,
+    skipped: 0,
+    failedTasks: [],
+  };
+
+  logger.log(
+    `Scheduled settlement scan signer=${address} blockTs=${blockTimestamp.toString()} tasks=${tasks.length}`
+  );
+
+  for (const task of tasks) {
+    const action = getAgentTaskAction(task, blockTimestamp);
+    if (action !== 'settleNoContest') {
+      summary.skipped += 1;
+      continue;
+    }
+
+    summary.eligible += 1;
+    try {
+      await sdk.settleNoContest(task.id);
+      summary.settled += 1;
+    } catch (error) {
+      summary.failed += 1;
+      summary.failedTasks.push({
+        taskId: task.id.toString(),
+        reason: error?.message || String(error),
+      });
+    }
+  }
+
+  return summary;
 }
 
 async function acceptTaskIfNeeded(env, task, erc8001Request) {
