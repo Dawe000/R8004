@@ -92,6 +92,35 @@ interface SDKConfig {
 }
 ```
 
+## Plasma Testnet Defaults
+
+Default addresses for Plasma testnet (chainId 9746). Override via env or explicit config:
+
+```typescript
+import {
+  ClientSDK,
+  AgentSDK,
+  getPlasmaTestnetConfig,
+  PLASMA_TESTNET_DEFAULTS,
+} from "@erc8001/agent-task-sdk";
+
+// Use defaults (override with ESCROW_ADDRESS, RPC_URL, CHAIN_ID, etc.)
+const config = getPlasmaTestnetConfig({
+  ipfs: { provider: "pinata", apiKey: process.env.PINATA_JWT },
+});
+
+const clientSdk = new ClientSDK(config, clientWallet);
+const agentSdk = new AgentSDK(config, agentWallet);
+
+// Or use constants directly
+const config = {
+  ...PLASMA_TESTNET_DEFAULTS,
+  escrowAddress: process.env.ESCROW_ADDRESS ?? PLASMA_TESTNET_DEFAULTS.escrowAddress,
+};
+```
+
+Env overrides: `ESCROW_ADDRESS`, `RPC_URL`, `CHAIN_ID`, `MOCK_TOKEN_ADDRESS`, `MOCK_OOv3_ADDRESS`.
+
 ## IPFS Mock (Local Testing)
 
 Use `provider: "mock"` to avoid IPFS entirely—returns deterministic URIs (`ipfs://mock{hash}`) with no network calls:

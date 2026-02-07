@@ -91,7 +91,7 @@ export function parseTask(raw: {
   };
 }
 
-/** Ensure allowance for spender - approves if needed */
+/** Ensure allowance for spender - approves if needed, waits for confirmation */
 export async function ensureAllowance(
   tokenAddress: string,
   owner: Signer,
@@ -102,5 +102,7 @@ export async function ensureAllowance(
   const ownerAddress = await owner.getAddress();
   const current = await token.allowance(ownerAddress, spender);
   if (current >= amount) return null;
-  return token.approve(spender, amount) as Promise<ContractTransactionResponse>;
+  const tx = await token.approve(spender, amount);
+  await tx.wait();
+  return tx;
 }

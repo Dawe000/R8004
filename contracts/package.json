@@ -6,7 +6,16 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:verbose": "VERBOSE=1 hardhat test",
-    "deploy:sandbox": "hardhat run script/deploy-sandbox.ts"
+    "deploy:sandbox": "hardhat run script/deploy-sandbox.ts",
+    "deploy:plasma": "hardhat run script/deploy-plasma-testnet.ts --network plasma-testnet",
+    "print-addresses": "hardhat run script/print-testnet-addresses.ts",
+    "testnet:flow": "hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-c": "FLOW_PATH=path-c hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-a": "FLOW_PATH=path-a hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-b-concede": "FLOW_PATH=path-b-concede hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-b-uma-agent": "FLOW_PATH=path-b-uma-agent hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-b-uma-client": "FLOW_PATH=path-b-uma-client hardhat run script/run-testnet-flow.ts",
+    "testnet:flow:path-d": "FLOW_PATH=path-d hardhat run script/run-testnet-flow.ts"
   },
   "devDependencies": {
     "@erc8001/agent-task-sdk": "file:../sdk",

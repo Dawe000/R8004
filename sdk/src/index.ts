@@ -6,6 +6,10 @@
 export { ClientSDK } from "./client.js";
 export { AgentSDK } from "./agent.js";
 export type { SDKConfig, IpfsConfig } from "./config.js";
+export {
+  PLASMA_TESTNET_DEFAULTS,
+  getPlasmaTestnetConfig,
+} from "./config.js";
 export type {
   Task,
   TaskStatus,

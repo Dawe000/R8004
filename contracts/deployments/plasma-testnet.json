@@ -1,0 +1,14 @@
+{
+  "chainId": 9746,
+  "network": "plasma-testnet",
+  "contracts": {
+    "MockToken": "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27",
+    "MockOOv3": "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310",
+    "AgentTaskEscrow": "0x058Cdf041A8911687D3941430F7fd641134C245C"
+  },
+  "sdk": {
+    "escrowAddress": "0x058Cdf041A8911687D3941430F7fd641134C245C",
+    "mockTokenAddress": "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27",
+    "rpcUrl": "https://testnet-rpc.plasma.to"
+  }
+}
