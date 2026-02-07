@@ -22,9 +22,10 @@ const MNEMONIC =
 
 function getSigner(index: number): ethers.Wallet {
   const provider = new ethers.JsonRpcProvider(RPC);
-  const hd = ethers.HDNodeWallet.fromPhrase(MNEMONIC);
-  const derived = hd.derivePath(`m/44'/60'/0'/0/${index}`);
-  return new ethers.Wallet(derived.privateKey, provider);
+  const m = ethers.Mnemonic.fromPhrase(MNEMONIC);
+  const root = ethers.HDNodeWallet.fromSeed(m.computeSeed());
+  const derived = root.derivePath(`m/44'/60'/0'/0/${index}`);
+  return derived.connect(provider);
 }
 
 const describeIntegration = ESCROW && TOKEN ? describe : describe.skip;
