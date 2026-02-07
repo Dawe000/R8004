@@ -57,7 +57,7 @@ const agentSdk = new AgentSDK(config, wallet);
 
 | Method | Description |
 |--------|-------------|
-| `createTask(descriptionUriOrSpec, paymentToken, paymentAmount, deadline)` | Create task. Pass URI string or JSON spec (uploads to IPFS if `config.ipfs` set). |
+| `createTask(descriptionUriOrSpec, paymentToken, paymentAmount, deadline)` | Create task. Pass URI (ipfs://, https://), plain text, or JSON spec. Plain text and JSON upload to IPFS (requires `config.ipfs`). |
 | `depositPayment(taskId)` | Deposit payment (approves token if needed). |
 | `disputeTask(taskId, evidenceUriOrObject)` | Dispute asserted result. |
 | `settleAgentConceded(taskId)` | Settle when agent conceded (no UMA escalation). |
@@ -73,7 +73,7 @@ const agentSdk = new AgentSDK(config, wallet);
 | Method | Description |
 |--------|-------------|
 | `acceptTask(taskId, stakeAmount)` | Accept task with stake. |
-| `assertCompletion(taskId, result)` | Assert completion (hashes result, signs, submits). |
+| `assertCompletion(taskId, result, resultUriOrObject?)` | Assert completion (hashes result, signs, submits). Optional result URI string (ipfs://, https://), plain text to upload, or JSON object to upload. Client can fetch result from task.resultURI. |
 | `escalateToUMA(taskId, evidenceUriOrObject)` | Escalate dispute to UMA. |
 | `settleNoContest(taskId)` | Settle after cooldown with no dispute. |
 | `cannotComplete(taskId, reason)` | Signal agent cannot complete. |
@@ -106,6 +106,8 @@ Action helpers: `needsClientDisputeBond(task)`, `needsAgentEscalationBond(task)`
 Bond amounts: `getDisputeBondAmount(task, disputeBondBps)`, `getEscalationBondAmount(task, escalationBondBps, umaMinBond)`.
 
 Use `getEscrowConfig` to obtain `agentResponseWindow`, `disputeBondBps`, and `umaConfig.minimumBond` for status helpers and bond calculations. Use `getTaskDescriptionUri` with `fetchFromIpfs` to load task spec when deciding whether to dispute.
+
+When status is `ResultAsserted`, `task.resultURI` (if set) points to the agent's result content - fetch via `fetchFromIpfs(task.resultURI)` and verify `keccak256(result) === task.resultHash`.
 
 ## IPFS Fetch (Evidence)
 

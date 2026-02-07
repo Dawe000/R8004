@@ -52,7 +52,7 @@ describe("AgentTaskEscrow - ERC-1271 Smart Wallet", function () {
       .connect(agent)
       .execute(
         await escrow.getAddress(),
-        escrow.interface.encodeFunctionData("assertCompletion", [0, resultHash, signature])
+        escrow.interface.encodeFunctionData("assertCompletion", [0, resultHash, signature, ""])
       );
 
     logStep("advanceCooldown");

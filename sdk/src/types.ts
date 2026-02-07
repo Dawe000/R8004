@@ -33,6 +33,7 @@ export interface Task {
   agentEscalationBond: bigint;
   clientEvidenceURI: string;
   agentEvidenceURI: string;
+  resultURI: string;
   umaAssertionId: string;
   umaResultTruth: boolean;
 }

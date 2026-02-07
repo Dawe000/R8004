@@ -31,6 +31,7 @@ interface IAgentTaskEscrow {
         uint256 agentEscalationBond;
         string clientEvidenceURI;
         string agentEvidenceURI;
+        string resultURI;
         bytes32 umaAssertionId;
         bool umaResultTruth;
     }
@@ -59,7 +60,8 @@ interface IAgentTaskEscrow {
     function assertCompletion(
         uint256 taskId,
         bytes32 resultHash,
-        bytes calldata agentSignature
+        bytes calldata agentSignature,
+        string calldata resultURI
     ) external;
 
     function disputeTask(

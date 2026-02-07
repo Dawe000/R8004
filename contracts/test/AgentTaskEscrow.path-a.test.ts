@@ -34,7 +34,7 @@ describe("AgentTaskEscrow - Path A (Happy Path)", function () {
     const signature = await signTaskResult(0n, resultHash, agent);
 
     logStep("assertCompletion", { taskId: 0, resultHash });
-    await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+    await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
     logStep("advanceCooldown");
     await advanceCooldown();
@@ -69,7 +69,7 @@ describe("AgentTaskEscrow - Path A (Happy Path)", function () {
 
     const resultHash = calculateResultHash("Task completed");
     const signature = await signTaskResult(0n, resultHash, agent);
-    await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+    await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
     await advanceCooldown();
 

@@ -39,7 +39,7 @@ describe("AgentTaskEscrow - Events", function () {
       const resultHash = calculateResultHash(result);
       const signature = await signTaskResult(0n, resultHash, agent);
 
-      await expect(escrow.connect(agent).assertCompletion(0, resultHash, signature))
+      await expect(escrow.connect(agent).assertCompletion(0, resultHash, signature, ""))
         .to.emit(escrow, "TaskResultAsserted")
         .withArgs(0, resultHash, await agent.getAddress());
 
@@ -73,7 +73,7 @@ describe("AgentTaskEscrow - Events", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       const disputeBond = (paymentAmount * 100n) / 10000n;
       await mockToken.connect(client).approve(await escrow.getAddress(), disputeBond);
@@ -113,7 +113,7 @@ describe("AgentTaskEscrow - Events", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       const disputeBond = (paymentAmount * 100n) / 10000n;
       await mockToken.connect(client).approve(await escrow.getAddress(), disputeBond);

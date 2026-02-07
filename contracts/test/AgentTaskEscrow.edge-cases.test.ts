@@ -21,7 +21,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const signature = await signTaskResult(0n, resultHash, agent);
 
       await expect(
-        escrow.connect(client).assertCompletion(0, resultHash, signature)
+        escrow.connect(client).assertCompletion(0, resultHash, signature, "")
       ).to.be.revertedWithCustomError(escrow, "NotTaskAgent");
     });
 
@@ -41,7 +41,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const signature = await signTaskResult(0n, resultHash, wrongSigner);
 
       await expect(
-        escrow.connect(agent).assertCompletion(0, resultHash, signature)
+        escrow.connect(agent).assertCompletion(0, resultHash, signature, "")
       ).to.be.revertedWithCustomError(escrow, "InvalidSignature");
     });
 
@@ -60,7 +60,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const corruptSignature = "0x" + "00".repeat(65);
 
       await expect(
-        escrow.connect(agent).assertCompletion(0, resultHash, corruptSignature)
+        escrow.connect(agent).assertCompletion(0, resultHash, corruptSignature, "")
       ).to.be.reverted;
     });
   });
@@ -81,7 +81,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       const disputeBond = (paymentAmount * 100n) / 10000n;
       await mockToken.connect(agent).approve(await escrow.getAddress(), disputeBond);
@@ -106,7 +106,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       await advanceCooldown();
 
@@ -135,7 +135,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       await expect(escrow.connect(agent).settleNoContest(0)).to.be.revertedWithCustomError(escrow, "CooldownNotExpired");
     });
@@ -157,7 +157,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
 
       const resultHash = calculateResultHash("result");
       const signature = await signTaskResult(0n, resultHash, agent);
-      await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+      await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
       const disputeBond = (paymentAmount * 100n) / 10000n;
       await mockToken.connect(client).approve(await escrow.getAddress(), disputeBond);

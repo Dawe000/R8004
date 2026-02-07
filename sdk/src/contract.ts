@@ -18,14 +18,14 @@ const ESCROW_ABI: InterfaceAbi = [
   "function createTask(string calldata descriptionURI, address paymentToken, uint256 paymentAmount, uint256 deadline) external returns (uint256 taskId)",
   "function acceptTask(uint256 taskId, uint256 stakeAmount) external",
   "function depositPayment(uint256 taskId) external",
-  "function assertCompletion(uint256 taskId, bytes32 resultHash, bytes calldata agentSignature) external",
+  "function assertCompletion(uint256 taskId, bytes32 resultHash, bytes calldata agentSignature, string calldata resultURI) external",
   "function disputeTask(uint256 taskId, string calldata clientEvidenceURI) external payable",
   "function escalateToUMA(uint256 taskId, string calldata agentEvidenceURI) external payable",
   "function timeoutCancellation(uint256 taskId, string calldata reason) external",
   "function cannotComplete(uint256 taskId, string calldata reason) external",
   "function settleNoContest(uint256 taskId) external",
   "function settleAgentConceded(uint256 taskId) external",
-  "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, bytes32 umaAssertionId, bool umaResultTruth))",
+  "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, string resultURI, bytes32 umaAssertionId, bool umaResultTruth))",
   "event TaskCreated(uint256 indexed taskId, address indexed client, string descriptionURI)",
   "event TaskAccepted(uint256 indexed taskId, address indexed agent, uint256 stake)",
 ];
@@ -70,6 +70,7 @@ export function parseTask(raw: {
   agentEscalationBond: bigint;
   clientEvidenceURI: string;
   agentEvidenceURI: string;
+  resultURI: string;
   umaAssertionId: string;
   umaResultTruth: boolean;
 }): Task {
@@ -90,6 +91,7 @@ export function parseTask(raw: {
     agentEscalationBond: raw.agentEscalationBond,
     clientEvidenceURI: raw.clientEvidenceURI,
     agentEvidenceURI: raw.agentEvidenceURI,
+    resultURI: raw.resultURI,
     umaAssertionId: raw.umaAssertionId,
     umaResultTruth: raw.umaResultTruth,
   };

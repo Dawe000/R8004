@@ -12,7 +12,7 @@ import {
   getClientTasksNeedingAction,
   isInProgress,
 } from "./tasks.js";
-import { uploadJson, fetchTaskEvidence } from "./ipfs.js";
+import { uploadJson, uploadText, fetchTaskEvidence, isLikelyUri } from "./ipfs.js";
 import { matchAgents } from "./marketmaker.js";
 
 export class ClientSDK {
@@ -36,7 +36,8 @@ export class ClientSDK {
   }
 
   /**
-   * Create task. Pass descriptionURI string directly, or spec object to upload to IPFS (requires config.ipfs).
+   * Create task. Pass descriptionURI string (ipfs://, https://, etc.), plain text to upload to IPFS,
+   * or spec object to upload to IPFS. Plain text and spec require config.ipfs.
    */
   async createTask(
     descriptionUriOrSpec: string | Record<string, unknown>,
@@ -46,7 +47,14 @@ export class ClientSDK {
   ): Promise<bigint> {
     let uri: string;
     if (typeof descriptionUriOrSpec === "string") {
-      uri = descriptionUriOrSpec;
+      if (isLikelyUri(descriptionUriOrSpec)) {
+        uri = descriptionUriOrSpec;
+      } else {
+        if (!this.config.ipfs) {
+          throw new Error("IPFS config required when passing plain text description");
+        }
+        uri = await uploadText(descriptionUriOrSpec, this.config.ipfs);
+      }
     } else {
       if (!this.config.ipfs) {
         throw new Error("IPFS config required when passing spec object");

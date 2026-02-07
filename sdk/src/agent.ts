@@ -12,7 +12,7 @@ import {
   isInProgress,
 } from "./tasks.js";
 import { calculateResultHash, signTaskResult } from "./crypto.js";
-import { uploadJson } from "./ipfs.js";
+import { uploadJson, uploadText, isLikelyUri } from "./ipfs.js";
 
 export class AgentSDK {
   constructor(
@@ -49,17 +49,38 @@ export class AgentSDK {
 
   /**
    * Assert task completion with result. Hashes result, signs, and submits.
+   * Optional resultUriOrObject: URI string (ipfs://, https://, etc.), plain text to upload,
+   * or JSON object to upload. Plain text and object require config.ipfs.
    */
   async assertCompletion(
     taskId: bigint,
-    result: string | Uint8Array
+    result: string | Uint8Array,
+    resultUriOrObject?: string | Record<string, unknown>
   ): Promise<void> {
     const resultHash = calculateResultHash(result);
     const signature = await signTaskResult(taskId, resultHash, this.signer);
+
+    let resultURI = "";
+    if (resultUriOrObject !== undefined && resultUriOrObject !== null) {
+      if (typeof resultUriOrObject === "string") {
+        if (isLikelyUri(resultUriOrObject)) {
+          resultURI = resultUriOrObject.trim();
+        } else {
+          if (!this.config.ipfs) {
+            throw new Error("IPFS config required when passing plain text result URI");
+          }
+          resultURI = await uploadText(resultUriOrObject, this.config.ipfs);
+        }
+      } else {
+        if (!this.config.ipfs) {
+          throw new Error("IPFS config required when passing result object");
+        }
+        resultURI = await uploadJson(resultUriOrObject, this.config.ipfs);
+      }
+    }
+
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
-    await (
-      await escrow.assertCompletion(taskId, resultHash, signature)
-    ).wait();
+    await (await escrow.assertCompletion(taskId, resultHash, signature, resultURI)).wait();
   }
 
   /**

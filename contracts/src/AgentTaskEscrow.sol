@@ -94,6 +94,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
             agentEscalationBond: 0,
             clientEvidenceURI: "",
             agentEvidenceURI: "",
+            resultURI: "",
             umaAssertionId: bytes32(0),
             umaResultTruth: false
         });
@@ -123,7 +124,8 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     function assertCompletion(
         uint256 taskId,
         bytes32 resultHash,
-        bytes calldata agentSignature
+        bytes calldata agentSignature,
+        string calldata resultURI
     ) external {
         Task storage t = tasks[taskId];
         if (t.status != TaskStatus.Accepted) revert InvalidTaskStatus(taskId, t.status, TaskStatus.Accepted);
@@ -137,6 +139,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
 
         t.resultHash = resultHash;
         t.agentSignature = agentSignature;
+        t.resultURI = resultURI;
         t.cooldownEndsAt = block.timestamp + cooldownPeriod;
         t.status = TaskStatus.ResultAsserted;
         emit TaskResultAsserted(taskId, resultHash, msg.sender);

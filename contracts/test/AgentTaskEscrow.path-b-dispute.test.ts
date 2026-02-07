@@ -30,7 +30,7 @@ describe("AgentTaskEscrow - Path B (Dispute, Agent Concedes)", function () {
     const resultHash = calculateResultHash(result);
     const signature = await signTaskResult(0n, resultHash, agent);
 
-    await escrow.connect(agent).assertCompletion(0, resultHash, signature);
+    await escrow.connect(agent).assertCompletion(0, resultHash, signature, "");
 
     const disputeBond = (paymentAmount * 100n) / 10000n;
     logStep("disputeTask", { taskId: 0, disputeBond: disputeBond.toString() });

@@ -5,6 +5,17 @@ import type { Task } from "./types.js";
 
 const DEFAULT_IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 
+/** True if string looks like a URI (ipfs://, https://, etc.) */
+export function isLikelyUri(s: string): boolean {
+  const trimmed = s?.trim() ?? "";
+  return (
+    trimmed.startsWith("ipfs://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("ar://")
+  );
+}
+
 /** Convert IPFS URI to gateway URL */
 function ipfsUriToGatewayUrl(
   uri: string,
@@ -99,6 +110,14 @@ export async function uploadJson(
   return scheme === "https"
     ? `https://ipfs.io/ipfs/${cid}`
     : `ipfs://${cid}`;
+}
+
+/** Upload plain text to IPFS and return URI */
+export async function uploadText(
+  text: string,
+  config: IpfsConfig
+): Promise<string> {
+  return uploadFile(new TextEncoder().encode(text), config);
 }
 
 /** Upload raw bytes/Blob to IPFS and return URI */
