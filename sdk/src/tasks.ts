@@ -1,7 +1,7 @@
 import type { Contract, Provider } from "ethers";
-import { getEscrowContract, parseTask } from "./contract.js";
-import { TaskStatus } from "./types.js";
-import type { Task } from "./types.js";
+import { getEscrowContract, parseTask } from "./contract";
+import { TaskStatus } from "./types";
+import type { Task } from "./types";
 
 /** Plasma RPC and many others limit eth_getLogs to 10,000 blocks per query */
 const LOG_CHUNK_SIZE = 10_000;

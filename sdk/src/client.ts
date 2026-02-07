@@ -6,14 +6,14 @@ import {
   getErc20Contract,
   parseTask,
   ensureAllowance,
-} from "./contract.js";
+} from "./contract";
 import {
   getTasksByClient,
   getClientTasksNeedingAction,
   isInProgress,
-} from "./tasks.js";
-import { uploadJson, fetchTaskEvidence } from "./ipfs.js";
-import { matchAgents } from "./marketmaker.js";
+} from "./tasks";
+import { uploadJson, fetchTaskEvidence } from "./ipfs";
+import { matchAgents } from "./marketmaker";
 
 export class ClientSDK {
   constructor(

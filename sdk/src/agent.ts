@@ -5,14 +5,14 @@ import {
   getEscrowContract,
   parseTask,
   ensureAllowance,
-} from "./contract.js";
+} from "./contract";
 import {
   getTasksByAgent,
   getAgentTasksNeedingAction,
   isInProgress,
-} from "./tasks.js";
-import { calculateResultHash, signTaskResult } from "./crypto.js";
-import { uploadJson } from "./ipfs.js";
+} from "./tasks";
+import { calculateResultHash, signTaskResult } from "./crypto";
+import { uploadJson } from "./ipfs";
 
 export class AgentSDK {
   constructor(

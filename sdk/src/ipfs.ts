@@ -1,7 +1,7 @@
 import { keccak256, toUtf8Bytes, getBytes } from "ethers";
-import type { IpfsConfig } from "./config.js";
-import { DEFAULT_IPFS_URI_SCHEME } from "./config.js";
-import type { Task } from "./types.js";
+import type { IpfsConfig } from "./config";
+import { DEFAULT_IPFS_URI_SCHEME } from "./config";
+import type { Task } from "./types";
 
 const DEFAULT_IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 
