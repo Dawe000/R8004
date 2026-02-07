@@ -12,7 +12,7 @@ import {
   isInProgress,
 } from "./tasks";
 import { calculateResultHash, signTaskResult } from "./crypto";
-import { uploadJson } from "./ipfs";
+import { uploadJson, uploadText, isLikelyUri } from "./ipfs";
 
 export class AgentSDK {
   constructor(
@@ -32,6 +32,12 @@ export class AgentSDK {
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     const raw = await escrow.getTask(taskId);
     return parseTask(raw);
+  }
+
+  /** Read whether payment has been deposited for a task */
+  async getPaymentDeposited(taskId: bigint): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.paymentDeposited(taskId);
   }
 
   /** Accept task with stake - approves token if needed */

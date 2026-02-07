@@ -1,0 +1,10 @@
+{
+  "name": "@ethoxford/intents-system-sdk",
+  "version": "1.0.0",
+  "description": "SDK for ERC8001 intent system – task intents, auction market client",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}

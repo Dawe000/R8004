@@ -2,7 +2,11 @@
   "scripts": {
     "sync:agent-vectors": "node exampleagents/scripts/sync-agent-card-embeddings.mjs"
   },
+  "type": "module",
   "dependencies": {
     "wrangler": "^4.63.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js tests/*.integration.test.js"
   }
 }

@@ -27,3 +27,7 @@ This project implements the ERC8001 Agent Task System—enabling clients to crea
 ## Quick Start
 
 See each module's README for setup and usage.
+
+## Testing
+
+Run the price negotiation (auction) flow tests with `npm test` (requires Node 18+). Tests cover the market maker, example agents auction endpoints, the intents SDK client, and a full integration flow.

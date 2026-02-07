@@ -6,6 +6,12 @@
  *   path: path-a | path-b-concede | path-b-uma-agent | path-b-uma-client | path-c | path-d
  */
 import "dotenv/config";
+import * as dotenv from "dotenv";
+import * as path from "path";
+// Load sdk/.env if PINATA_JWT not set (for path-b-uma IPFS uploads)
+if (!process.env.PINATA_JWT) {
+  dotenv.config({ path: path.join(process.cwd(), "..", "sdk", ".env") });
+}
 import { ethers } from "ethers";
 import {
   ClientSDK,
@@ -13,7 +19,6 @@ import {
   getPlasmaTestnetConfig,
 } from "@erc8001/agent-task-sdk";
 import * as fs from "fs";
-import * as path from "path";
 import { TESTNET_CONFIG } from "../config/testnet";
 
 const COOLDOWN_SECONDS = TESTNET_CONFIG.COOLDOWN_PERIOD;
@@ -32,6 +37,7 @@ const VALID_PATHS = [
   "path-b-concede",
   "path-b-uma-agent",
   "path-b-uma-client",
+  "path-b-uma-escalate", // Escalate only – leaves dispute for DVM to resolve
   "path-c",
   "path-d",
 ];
@@ -41,7 +47,7 @@ if (!rawPath || VALID_PATHS.includes(rawPath)) {
   pathArg = rawPath ?? "path-a";
 } else {
   console.error("Invalid path:", rawPath);
-  console.error("Valid: path-a | path-b-concede | path-b-uma-agent | path-b-uma-client | path-c | path-d");
+  console.error("Valid: path-a | path-b-concede | path-b-uma-agent | path-b-uma-client | path-b-uma-escalate | path-c | path-d");
   process.exit(1);
 }
 
@@ -164,11 +170,14 @@ async function main() {
     if (delta !== paymentAmount + disputeBond + stakeAmount) {
       throw new Error(`Expected ${paymentAmount + disputeBond + stakeAmount}, got ${delta}`);
     }
-  } else if (pathArg === "path-b-uma-agent" || pathArg === "path-b-uma-client") {
+  } else if (pathArg === "path-b-uma-agent" || pathArg === "path-b-uma-client" || pathArg === "path-b-uma-escalate") {
+    if (!config.ipfs) {
+      throw new Error("PINATA_JWT required for path-b-uma (IPFS uploads). Set in .env or sdk/.env.");
+    }
     const agentWins = pathArg === "path-b-uma-agent";
     const deadline = Math.floor(Date.now() / 1000) + 86400;
-    console.log("1. Client creates task...");
-    const taskId = await clientSdk.createTask("ipfs://description", tokenAddr, paymentAmount, deadline);
+    console.log("1. Client creates task (uploading description to IPFS)...");
+    const taskId = await clientSdk.createTask("Task: verify completion", tokenAddr, paymentAmount, deadline);
     console.log("   TaskId:", taskId.toString());
 
     console.log("2. Agent accepts task...");
@@ -183,15 +192,35 @@ async function main() {
     await agentSdk.assertCompletion(taskId, "Task completed successfully");
     console.log("   Done");
 
-    console.log("5. Client disputes...");
-    await clientSdk.disputeTask(taskId, "ipfs://client-evidence");
+    console.log("5. Client disputes (uploading evidence to IPFS)...");
+    await clientSdk.disputeTask(taskId, { reason: "Client disputes: task was not completed correctly" });
     console.log("   Done");
 
-    console.log("6. Agent escalates to UMA...");
-    await agentSdk.escalateToUMA(taskId, "ipfs://agent-evidence");
+    console.log("6. Agent escalates to UMA (uploading evidence to IPFS)...");
+    await agentSdk.escalateToUMA(taskId, { reason: "Agent claims task was completed as specified" });
     const task = await clientSdk.getTask(taskId);
     const assertionId = task.umaAssertionId;
     console.log("   AssertionId:", assertionId);
+    if (pathArg === "path-b-uma-escalate") {
+      console.log(`7. Waiting ${UMA_LIVENESS_SECONDS}s for UMA liveness...`);
+      await sleep(UMA_LIVENESS_SECONDS * 1000);
+      console.log("8. Polling until DVM resolves (run DVM worker + trigger cron in another terminal)...");
+      const pollIntervalMs = 15000;
+      const timeoutMs = 600000; // 10 min
+      const start = Date.now();
+      for (;;) {
+        const t = await clientSdk.getTask(taskId);
+        if (Number(t.status) === 8) {
+          console.log("   Resolved. Path B (UMA escalate + DVM) complete.");
+          return;
+        }
+        if (Date.now() - start > timeoutMs) {
+          throw new Error(`Timeout: task not resolved after ${timeoutMs / 1000}s. Run DVM worker and trigger cron.`);
+        }
+        console.log("   Status:", t.status, "- waiting", pollIntervalMs / 1000, "s...");
+        await sleep(pollIntervalMs);
+      }
+    }
 
     console.log(`7. Waiting ${UMA_LIVENESS_SECONDS}s for UMA liveness...`);
     await sleep(UMA_LIVENESS_SECONDS * 1000);

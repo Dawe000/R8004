@@ -35,6 +35,12 @@ export class ClientSDK {
     return parseTask(raw);
   }
 
+  /** Read whether payment has been deposited for a task */
+  async getPaymentDeposited(taskId: bigint): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.paymentDeposited(taskId);
+  }
+
   /**
    * Create task. Pass descriptionURI string (ipfs://, https://, etc.), plain text to upload to IPFS,
    * or spec object to upload to IPFS. Plain text and spec require config.ipfs.

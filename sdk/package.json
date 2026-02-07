@@ -2,7 +2,6 @@
   "name": "@erc8001/agent-task-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for ERC8001 Agent Task Escrow - client and agent interactions",
-  "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

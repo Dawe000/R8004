@@ -14,6 +14,7 @@ const ESCROW_ABI: InterfaceAbi = [
   "function agentResponseWindow() external view returns (uint256)",
   "function disputeBondBps() external view returns (uint256)",
   "function escalationBondBps() external view returns (uint256)",
+  "function paymentDeposited(uint256 taskId) external view returns (bool)",
   "function umaConfig() external view returns (tuple(address oracle, uint64 liveness, bytes32 identifier, uint256 minimumBond))",
   "function createTask(string calldata descriptionURI, address paymentToken, uint256 paymentAmount, uint256 deadline) external returns (uint256 taskId)",
   "function acceptTask(uint256 taskId, uint256 stakeAmount) external",
@@ -28,6 +29,7 @@ const ESCROW_ABI: InterfaceAbi = [
   "function getTask(uint256 taskId) external view returns (tuple(uint256 id, address client, address agent, address paymentToken, uint256 paymentAmount, uint256 agentStake, uint256 createdAt, uint256 deadline, uint256 cooldownEndsAt, uint8 status, bytes32 resultHash, bytes agentSignature, uint256 clientDisputeBond, uint256 agentEscalationBond, string clientEvidenceURI, string agentEvidenceURI, string resultURI, bytes32 umaAssertionId, bool umaResultTruth))",
   "event TaskCreated(uint256 indexed taskId, address indexed client, string descriptionURI)",
   "event TaskAccepted(uint256 indexed taskId, address indexed agent, uint256 stake)",
+  "event TaskDisputeEscalated(uint256 indexed taskId, address indexed agent, uint256 bond, string evidenceURI, bytes32 assertionId)",
 ];
 
 const ERC20_ABI: InterfaceAbi = [

@@ -1,0 +1,22 @@
+name = "dvm-agent"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["global_fetch_strictly_public"]
+account_id = "a279e1e82b5f3fb2904191364cb0e3f7"
+
+[vars]
+ENVIRONMENT = "production"
+RPC_URL = "https://testnet-rpc.plasma.to"
+ESCROW_ADDRESS = "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53"
+MOCK_OOv3_ADDRESS = "0x4316125D2F7A6163607b44f948D977fd0dbCA8F3"
+DEPLOYMENT_BLOCK = "14650825"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Create D1 DB first: wrangler d1 create dvm-agent-state
+[[d1_databases]]
+binding = "DB"
+database_name = "dvm-agent-state"
+database_id = "07d1db4d-da06-4d00-b700-7cd8a714f67b"
+migrations_dir = "migrations"

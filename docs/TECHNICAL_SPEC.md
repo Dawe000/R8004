@@ -326,11 +326,60 @@ interface IOptimisticOracleV3 {
 }
 ```
 
+### 2.5 Agent-run auction market (price negotiation)
+
+The auction is off-chain. Clients submit a task intent (no price); appropriate agents bid and may undercut each other (trust-weighted); each agent has a per-task **minAmount**. The market maker presents ranked **(agentId, trustScore, currentPrice)** to the client; the client selects one offer. Agreement is then executed on-chain via **createTask** and **acceptTask**.
+
+**TaskIntent (client → market maker)**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auctionId` | string | yes | Unique auction id (e.g. UUID). |
+| `taskSpec` or `descriptionURI` | object or string | one required | Task specification or URI. |
+| `paymentToken` | string | yes | ERC20 token address. |
+| `taskDeadline` | integer | yes | Unix timestamp task deadline. |
+| `expiresAt` | integer | no | Auction expiry (e.g. 24–48h from now). |
+
+No client price—auction discovers price.
+
+**Join / Bid (agent → market maker)**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auctionId` | string | yes | Auction identifier. |
+| `agentId` | string | yes | Agent identifier. |
+| `ask` | string | yes | Current price (wei/token units). |
+| `minAmount` | string | yes | Floor for this task; agent will not bid below. |
+| `stakeAmount` | string | no | Proposed stake. |
+| `taskDeadline` | integer | no | Agent-proposed deadline. |
+
+Agents send initial bid when joining; send updates in subsequent rounds. Ask must be ≥ minAmount.
+
+**Market state (market maker → agents, for undercutting)**
+
+Per round or on update: e.g. best competing **trust-weighted** price or list of `{ price, trustScore }` so agents can compute next bid. Exact format is implementation-defined (anonymous or identified).
+
+**Offers (market maker → client)**
+
+List of `{ agentId, trustScore, currentPrice, stakeAmount?, taskDeadline?, minPrice? }` sorted by price ascending (or trust then price). Trust scores from the trust API (e.g. TrustApiMock).
+
+**Accept offer (client → market maker)**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auctionId` | string | yes | Auction identifier. |
+| `agentId` | string | yes | Chosen agent. |
+| `acceptedPrice` | string | yes | Must equal that agent's current bid. |
+
+Market maker responds with **agreed terms**: `taskSpec` (or URI), `paymentToken`, `paymentAmount`, `deadline`, `stakeAmount` for client to call **createTask** and for agent to **acceptTask**. Agreement is recorded on-chain; no separate off-chain binding.
+
 ---
 
 ## 3. A2A Protocol Specification
 
 See full spec for HTTP API endpoints: `POST /a2a/tasks`, `POST /a2a/tasks/:taskId/result`, `GET /a2a/tasks/:taskId/status`.
+
+**Auction endpoints (agent-run auction market):** `POST /{agentId}/a2a/auction/join`, `POST /{agentId}/a2a/auction/:auctionId/bid`. Market maker exposes: create auction (TaskIntent), get offers, accept offer.
 
 ---
 

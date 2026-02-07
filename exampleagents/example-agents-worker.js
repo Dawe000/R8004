@@ -34,6 +34,8 @@ import agentCard32 from './agent-cards/agent-32.json' assert { type: 'json' };
 import agentCard33 from './agent-cards/agent-33.json' assert { type: 'json' };
 import agentCard34 from './agent-cards/agent-34.json' assert { type: 'json' };
 import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
+import { AgentSDK } from '../sdk/src/agent.ts';
+import { JsonRpcProvider, Wallet } from '../sdk/node_modules/ethers/lib.esm/index.js';
 const TASK_STATUS = {
   SUBMITTED: 'submitted',
   RUNNING: 'running',
@@ -51,6 +53,11 @@ const MAX_SYNC_TIMEOUT_MS = 60000;
 const MIN_SYNC_TIMEOUT_MS = 1000;
 const TASK_RETENTION_DAYS = 7;
 const CLEANUP_BATCH_SIZE = 200;
+const DEFAULT_ERC8001_CHAIN_ID = 9746;
+const DEFAULT_ERC8001_RPC_URL = 'https://testnet-rpc.plasma.to';
+const DEFAULT_ERC8001_ESCROW_ADDRESS = '0x2E24A0a838Fa71765A00CB9528B6C378D8437D53';
+const DEFAULT_PAYMENT_WAIT_MS = 10 * 60 * 1000;
+const DEFAULT_PAYMENT_POLL_MS = 5000;
 
 export default {
   async fetch(request, env, ctx) {
@@ -106,6 +113,8 @@ export default {
             `/${agentId}/a2a/tasks`,
             `/${agentId}/a2a/tasks/{taskId}/status`,
             `/${agentId}/a2a/tasks/{taskId}/result`,
+            `/${agentId}/a2a/auction/join`,
+            `/${agentId}/a2a/auction/{auctionId}/bid`,
           ],
         },
         200,
@@ -303,10 +312,14 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
 
     const skillId = resolveSkillId(agent, body);
     const modelRequested = resolveRequestedModel(agent, body, env);
+    const erc8001Request = parseErc8001Request(body);
     const now = nowIso();
     const forceExpired = isTruthy(url.searchParams.get('forceExpired')) || isTruthy(request.headers.get('x-force-expired'));
     const expiresAt = forceExpired ? addDaysIso(-1) : addDaysIso(TASK_RETENTION_DAYS);
-    const forceAsync = isTruthy(url.searchParams.get('forceAsync')) || isTruthy(request.headers.get('x-force-async'));
+    const forceAsync =
+      isTruthy(url.searchParams.get('forceAsync')) ||
+      isTruthy(request.headers.get('x-force-async')) ||
+      Boolean(erc8001Request);
     const forceFailure = isTruthy(url.searchParams.get('forceFailure')) || isTruthy(request.headers.get('x-force-failure'));
     const syncTimeoutMs = resolveSyncTimeoutMs(url.searchParams.get('syncTimeoutMs'), env.SYNC_TASK_TIMEOUT_MS);
 
@@ -329,6 +342,7 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
         forceAsync: forceAsync,
         forceFailure: forceFailure,
         forceExpired: forceExpired,
+        erc8001: erc8001Request || null,
       }),
       createdAt: now,
       startedAt: null,
@@ -707,18 +721,41 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
   const body = safeJsonParse(task.request_payload_json) || {};
 
   try {
+    const erc8001Request = parseErc8001Request(body);
+    let erc8001Meta = null;
+    if (erc8001Request) {
+      erc8001Meta = await acceptAndWaitForPaymentDeposit(env, task, erc8001Request);
+    }
+
     const result = await processAgentTask(agent, body, task.input_text, env, {
       skillId: task.skill_id || undefined,
       modelRequested: task.model_requested || undefined,
       forceFailure: Boolean(payload.forceFailure),
     });
 
+    const responseMeta = {
+      ...(result?.responseMeta || {}),
+      ...(erc8001Meta ? { erc8001: erc8001Meta } : {}),
+    };
+
     await markTaskCompleted(env, {
       taskId: task.id,
       result: result,
       modelUsed: result?.model || task.model_requested,
-      responseMeta: result?.responseMeta || null,
+      responseMeta: responseMeta,
     });
+
+    if (erc8001Request) {
+      const completedTask = await getTaskById(env, task.id);
+      const assertMeta = await assertErc8001Completion(env, task, completedTask, erc8001Request, result);
+      await updateTaskResponseMeta(env, task.id, {
+        ...responseMeta,
+        erc8001: {
+          ...erc8001Meta,
+          ...assertMeta,
+        },
+      });
+    }
   } catch (error) {
     await markTaskFailed(env, task.id, error.message || 'Queued task execution failed.');
     throw error;
@@ -730,6 +767,172 @@ async function enqueueTaskExecution(env, payload) {
     throw new Error('Missing TASK_EXEC_QUEUE binding in environment.');
   }
   await env.TASK_EXEC_QUEUE.send(payload);
+}
+
+function parseErc8001Request(body) {
+  const taskId = body?.erc8001?.taskId;
+  const stakeAmountWei = body?.erc8001?.stakeAmountWei;
+  if (!taskId || !stakeAmountWei) {
+    return null;
+  }
+  return {
+    taskId: String(taskId),
+    stakeAmountWei: String(stakeAmountWei),
+    publicBaseUrl: body?.erc8001?.publicBaseUrl ? String(body.erc8001.publicBaseUrl) : undefined,
+  };
+}
+
+let erc8001SdkPromise = null;
+
+async function getErc8001Sdk(env) {
+  if (!erc8001SdkPromise) {
+    erc8001SdkPromise = (async () => {
+      if (!env.AGENT_EVM_PRIVATE_KEY) {
+        throw new Error('Missing AGENT_EVM_PRIVATE_KEY for ERC8001 agent transactions.');
+      }
+
+      const rpcUrl = env.ERC8001_RPC_URL || DEFAULT_ERC8001_RPC_URL;
+      const chainId = Number(env.ERC8001_CHAIN_ID || DEFAULT_ERC8001_CHAIN_ID);
+      const escrowAddress = env.ERC8001_ESCROW_ADDRESS || DEFAULT_ERC8001_ESCROW_ADDRESS;
+      const privateKey = env.AGENT_EVM_PRIVATE_KEY.trim();
+
+      const provider = new JsonRpcProvider(rpcUrl);
+      const wallet = new Wallet(privateKey, provider);
+      const sdk = new AgentSDK(
+        {
+          escrowAddress,
+          chainId,
+          rpcUrl,
+          ipfs: { provider: 'mock', uriScheme: 'ipfs' },
+        },
+        wallet
+      );
+
+      return {
+        sdk,
+        address: await wallet.getAddress(),
+      };
+    })();
+  }
+  return erc8001SdkPromise;
+}
+
+async function acceptAndWaitForPaymentDeposit(env, task, erc8001Request) {
+  const { sdk, address } = await getErc8001Sdk(env);
+  const onchainTaskId = BigInt(erc8001Request.taskId);
+  const stakeAmountWei = BigInt(erc8001Request.stakeAmountWei);
+  const meta = {
+    onchainTaskId: erc8001Request.taskId,
+    stakeAmountWei: erc8001Request.stakeAmountWei,
+    agentAddress: address,
+    acceptedAt: null,
+    paymentObservedAt: null,
+  };
+
+  let onchainTask = await sdk.getTask(onchainTaskId);
+  const status = Number(onchainTask.status);
+  const onchainAgent = String(onchainTask.agent || '').toLowerCase();
+  const signerAddress = address.toLowerCase();
+
+  if (status === 1) {
+    await sdk.acceptTask(onchainTaskId, stakeAmountWei);
+    meta.acceptedAt = nowIso();
+    onchainTask = await sdk.getTask(onchainTaskId);
+  } else if (status === 2) {
+    if (onchainAgent !== signerAddress) {
+      throw new Error(
+        `Task ${erc8001Request.taskId} already accepted by another agent: ${onchainTask.agent}`
+      );
+    }
+    meta.acceptedAt = 'already-accepted';
+  } else if (status >= 3) {
+    throw new Error(
+      `Task ${erc8001Request.taskId} is not in Created/Accepted state (status ${status}).`
+    );
+  }
+
+  await waitForPaymentDeposit(sdk, onchainTaskId, env);
+  meta.paymentObservedAt = nowIso();
+  return meta;
+}
+
+async function waitForPaymentDeposit(agentSdk, onchainTaskId, env) {
+  const timeoutMs = Number(env.ERC8001_PAYMENT_WAIT_MS || DEFAULT_PAYMENT_WAIT_MS);
+  const pollMs = Number(env.ERC8001_PAYMENT_POLL_MS || DEFAULT_PAYMENT_POLL_MS);
+  const startedAt = Date.now();
+
+  while (true) {
+    const deposited = await agentSdk.getPaymentDeposited(onchainTaskId);
+    if (deposited) {
+      return;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(
+        `Timed out waiting for payment deposit on task ${onchainTaskId.toString()}`
+      );
+    }
+    await sleep(pollMs);
+  }
+}
+
+function buildResultUri(agentId, runId, erc8001Request, env) {
+  const base = normalizeBaseUrl(
+    erc8001Request.publicBaseUrl ||
+      env.ERC8001_PUBLIC_BASE_URL
+  );
+  return `${base}/${agentId}/tasks/${runId}`;
+}
+
+function normalizeBaseUrl(url) {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Missing public base URL for resultURI generation.');
+  }
+  return url.replace(/\/+$/, '');
+}
+
+async function assertErc8001Completion(env, task, completedTask, erc8001Request, executionResult) {
+  const { sdk, address } = await getErc8001Sdk(env);
+  const onchainTaskId = BigInt(erc8001Request.taskId);
+  const onchainTask = await sdk.getTask(onchainTaskId);
+  const status = Number(onchainTask.status);
+  const onchainAgent = String(onchainTask.agent || '').toLowerCase();
+  const signerAddress = address.toLowerCase();
+
+  const resultURI = buildResultUri(task.agent_id, task.id, erc8001Request, env);
+  const resultPayload = JSON.stringify(
+    formatTaskForClient(completedTask) || executionResult || {}
+  );
+
+  if (status === 3 || status === 8) {
+    return {
+      assertedAt: 'already-asserted',
+      resultURI: onchainTask.resultURI || resultURI,
+    };
+  }
+
+  if (status !== 2) {
+    throw new Error(
+      `Cannot assert completion for task ${erc8001Request.taskId}; expected Accepted status, got ${status}.`
+    );
+  }
+
+  if (onchainAgent !== signerAddress) {
+    throw new Error(
+      `On-chain task ${erc8001Request.taskId} agent mismatch: ${onchainTask.agent}`
+    );
+  }
+
+  await sdk.assertCompletion(onchainTaskId, resultPayload, resultURI);
+
+  return {
+    assertedAt: nowIso(),
+    resultURI,
+  };
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resolveSkillId(agent, body) {
@@ -913,6 +1116,21 @@ async function markTaskCompleted(env, { taskId, result, modelUsed, responseMeta 
       now,
       taskId
     )
+    .run();
+}
+
+async function updateTaskResponseMeta(env, taskId, responseMeta) {
+  const db = requireDb(env);
+  const now = nowIso();
+  await db
+    .prepare(
+      `
+        UPDATE tasks
+        SET response_meta_json = ?, updated_at = ?
+        WHERE id = ?
+      `
+    )
+    .bind(JSON.stringify(responseMeta ?? null), now, taskId)
     .run();
 }
 
