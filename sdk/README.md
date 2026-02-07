@@ -237,7 +237,16 @@ cd sdk && npm run test:live
 
 Tests: `getNextTaskId`, `getTask`, `getTasksByClient`, `getTasksByAgent`, status helpers, `getMyTasks`, `getTasksNeedingAction`.
 
-Optional: set `SDK_LIVE_RUN_FLOW=1` to run a full Path A flow (creates task, costs tokens).
+Optional: set `SDK_LIVE_RUN_FLOW=path-a,path-c,path-d` to run flow tests (creates tasks, costs tokens). Add `PINATA_JWT` to enable IPFS uploads in flow tests.
+
+## IPFS Live Test
+
+Verify Pinata uploads and round-trip fetch:
+
+```bash
+# Requires PINATA_JWT in .env
+cd sdk && npm run test:ipfs:live
+```
 
 ## Scripts
 
@@ -245,4 +254,5 @@ Optional: set `SDK_LIVE_RUN_FLOW=1` to run a full Path A flow (creates task, cos
 - `npm test` - Run unit tests (excludes integration and live)
 - `npm run test:integration` - Run integration tests (requires env vars)
 - `npm run test:live` - Run live Plasma testnet tests (requires SDK_LIVE_TESTNET=1, MNEMONIC)
+- `npm run test:ipfs:live` - Run live IPFS upload/fetch test (requires PINATA_JWT)
 - `npm run typecheck` - Type check without emit

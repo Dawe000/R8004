@@ -1,1 +1,15 @@
-{"chainId":9746,"network":"plasma-testnet","contracts":{"MockToken":"0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27","MockOOv3":"0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310","AgentTaskEscrow":"0x058Cdf041A8911687D3941430F7fd641134C245C"},"sdk":{"escrowAddress":"0x058Cdf041A8911687D3941430F7fd641134C245C","mockTokenAddress":"0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27","rpcUrl":"https://testnet-rpc.plasma.to","deploymentBlock":14612077}}
+{
+  "chainId": 9746,
+  "network": "plasma-testnet",
+  "contracts": {
+    "MockToken": "0xd201516E43fe79D176c2A48420685CAB9f87cF6C",
+    "MockOOv3": "0x4316125D2F7A6163607b44f948D977fd0dbCA8F3",
+    "AgentTaskEscrow": "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53"
+  },
+  "sdk": {
+    "escrowAddress": "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53",
+    "mockTokenAddress": "0xd201516E43fe79D176c2A48420685CAB9f87cF6C",
+    "rpcUrl": "https://testnet-rpc.plasma.to",
+    "deploymentBlock": 14650825
+  }
+}

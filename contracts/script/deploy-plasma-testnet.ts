@@ -1,4 +1,6 @@
 import { ethers } from "hardhat";
+import * as fs from "fs";
+import * as path from "path";
 import { TESTNET_CONFIG } from "../config";
 
 async function main() {
@@ -37,6 +39,33 @@ async function main() {
   const mintAmount = ethers.parseEther("1000000");
   await mockToken.mint(await client.getAddress(), mintAmount);
   await mockToken.mint(await agent.getAddress(), mintAmount);
+
+  const deployTx = escrow.deploymentTransaction();
+  const deploymentBlock = deployTx
+    ? (await deployTx.wait()).blockNumber
+    : (await ethers.provider.getBlockNumber());
+  const rpcUrl = process.env.PLASMA_RPC_URL ?? "https://testnet-rpc.plasma.to";
+  const deployment = {
+    chainId: 9746,
+    network: "plasma-testnet",
+    contracts: {
+      MockToken: await mockToken.getAddress(),
+      MockOOv3: await mockOOv3.getAddress(),
+      AgentTaskEscrow: await escrow.getAddress(),
+    },
+    sdk: {
+      escrowAddress: await escrow.getAddress(),
+      mockTokenAddress: await mockToken.getAddress(),
+      rpcUrl,
+      deploymentBlock,
+    },
+  };
+
+  const deployDir = path.join(process.cwd(), "deployments");
+  if (!fs.existsSync(deployDir)) fs.mkdirSync(deployDir, { recursive: true });
+  const deployPath = path.join(deployDir, "plasma-testnet.json");
+  fs.writeFileSync(deployPath, JSON.stringify(deployment, null, 2), "utf8");
+  console.log("Updated", deployPath);
 
   console.log("Deployed contracts:");
   console.log("  MockToken:", await mockToken.getAddress());

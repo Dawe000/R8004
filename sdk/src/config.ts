@@ -4,13 +4,13 @@
 
 /** Default Plasma testnet (chainId 9746) deployment addresses */
 export const PLASMA_TESTNET_DEFAULTS = {
-  escrowAddress: "0x058Cdf041A8911687D3941430F7fd641134C245C" as const,
-  mockTokenAddress: "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27" as const,
-  mockOOv3Address: "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310" as const,
+  escrowAddress: "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53" as const,
+  mockTokenAddress: "0xd201516E43fe79D176c2A48420685CAB9f87cF6C" as const,
+  mockOOv3Address: "0x4316125D2F7A6163607b44f948D977fd0dbCA8F3" as const,
   chainId: 9746,
   rpcUrl: "https://testnet-rpc.plasma.to",
   /** Escrow deployment block - used to limit eth_getLogs range on RPCs with 10k block limit (Plasma) */
-  deploymentBlock: 14612077,
+  deploymentBlock: 14650825,
 } as const;
 
 export interface IpfsConfig {

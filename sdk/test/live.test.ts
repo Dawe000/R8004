@@ -67,7 +67,7 @@ describeLive("SDK live (Plasma testnet)", () => {
   let config: ReturnType<typeof getPlasmaTestnetConfig>;
 
   beforeAll(() => {
-    config = getPlasmaTestnetConfig();
+    config = getLiveConfig();
     client = getSigner(1);
     agent = getSigner(2);
     clientSdk = new ClientSDK(config, client);
@@ -83,7 +83,7 @@ describeLive("SDK live (Plasma testnet)", () => {
   it("getTask fetches existing task when taskId < nextTaskId", async () => {
     const nextId = await getNextTaskId(config.escrowAddress, client.provider!);
     if (nextId === 0n) {
-      expect(await getTasksByClient(config.escrowAddress, client.provider!, client.address)).toEqual([]);
+      expect(await getTasksByClient(config.escrowAddress, client.provider!, client.address, config.deploymentBlock)).toEqual([]);
       return;
     }
     const task = await getTask(config.escrowAddress, client.provider!, 0n);
@@ -92,7 +92,7 @@ describeLive("SDK live (Plasma testnet)", () => {
     expect(task.status).toBeDefined();
     expect(typeof task.client).toBe("string");
     expect(typeof task.agent).toBe("string");
-  });
+  }, 15000);
 
   it("getTasksByClient returns tasks created by client", async () => {
     const tasks = await getTasksByClient(
@@ -175,7 +175,9 @@ describeLive("SDK live (Plasma testnet)", () => {
 
   it("fetchFromIpfs fetches content from known public CID", async () => {
     const uri = "ipfs://QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
-    const content = await fetchFromIpfs(uri);
+    const content = await fetchFromIpfs(uri, {
+      gateway: "https://gateway.pinata.cloud/ipfs/",
+    });
     expect(typeof content).toBe("string");
     expect((content as string).length).toBeGreaterThan(0);
   }, 15000);
@@ -205,15 +207,33 @@ const AGENT_RESPONSE_WINDOW = 300;
 const PATH_B_CONCEDE_WAIT = COOLDOWN + AGENT_RESPONSE_WINDOW;
 const UMA_LIVENESS = 180;
 
-function loadPlasmaDeployment(): { contracts?: { MockOOv3?: string } } {
+function loadPlasmaDeployment(): {
+  contracts?: { MockOOv3?: string };
+  sdk?: { escrowAddress?: string; mockTokenAddress?: string; rpcUrl?: string; deploymentBlock?: number };
+} {
   const p = path.join(process.cwd(), "..", "contracts", "deployments", "plasma-testnet.json");
   if (!fs.existsSync(p)) return {};
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 
+function getLiveConfig() {
+  const deployment = loadPlasmaDeployment();
+  return getPlasmaTestnetConfig({
+    ipfs: process.env.PINATA_JWT ? { provider: "pinata" as const, apiKey: process.env.PINATA_JWT } : undefined,
+    ...(deployment?.sdk && {
+      escrowAddress: deployment.sdk.escrowAddress,
+      mockTokenAddress: deployment.sdk.mockTokenAddress,
+      rpcUrl: deployment.sdk.rpcUrl,
+      deploymentBlock: deployment.sdk.deploymentBlock,
+    }),
+  });
+}
+
+const hasIpfs = !!(process.env.PINATA_JWT?.trim());
+
 descFlow("path-a")("SDK live Path A flow (Plasma testnet)", () => {
   it("full Path A: create -> accept -> deposit -> assert -> settle", async () => {
-    const config = getPlasmaTestnetConfig();
+    const config = getLiveConfig();
     const client = getSigner(1);
     const agent = getSigner(2);
     const clientSdk = new ClientSDK(config, client);
@@ -247,11 +267,48 @@ descFlow("path-a")("SDK live Path A flow (Plasma testnet)", () => {
     const balance = await token.balanceOf(agent.address);
     expect(balance).toBeGreaterThan(0n);
   }, 300000);
+
+  it(
+    "Path A with IPFS uploads (plain text description + result)",
+    async () => {
+      if (!hasIpfs) return;
+      const cfg = getLiveConfig();
+      const c = getSigner(1);
+      const a = getSigner(2);
+      const clientSdk = new ClientSDK(cfg, c);
+      const agentSdk = new AgentSDK(cfg, a);
+      const tokenAddr = cfg.mockTokenAddress!;
+      const paymentAmount = ethers.parseEther("100");
+      const stakeAmount = ethers.parseEther("10");
+      const deadline = Math.floor(Date.now() / 1000) + 86400;
+
+      const taskId = await clientSdk.createTask(
+        "Build a todo app - IPFS upload test " + Date.now(),
+        tokenAddr,
+        paymentAmount,
+        deadline
+      );
+      await agentSdk.acceptTask(taskId, stakeAmount);
+      await clientSdk.depositPayment(taskId);
+      await agentSdk.assertCompletion(
+        taskId,
+        "Task completed",
+        "Result delivered via IPFS " + Date.now()
+      );
+      await new Promise((r) => setTimeout(r, (COOLDOWN + 5) * 1000));
+      await agentSdk.settleNoContest(taskId);
+
+      const task = await clientSdk.getTask(taskId);
+      expect(task.resultURI).toBeTruthy();
+      expect(task.resultURI).toMatch(/^ipfs:\/\//);
+    },
+    300000
+  );
 });
 
 descFlow("path-c")("SDK live Path C flow (Plasma testnet)", () => {
   it("full Path C: create (deadline past) -> accept -> deposit -> timeoutCancellation", async () => {
-    const config = getPlasmaTestnetConfig();
+    const config = getLiveConfig();
     const client = getSigner(1);
     const agent = getSigner(2);
     const clientSdk = new ClientSDK(config, client);
@@ -286,7 +343,7 @@ descFlow("path-c")("SDK live Path C flow (Plasma testnet)", () => {
 
 descFlow("path-d")("SDK live Path D flow (Plasma testnet)", () => {
   it("full Path D: create -> accept -> deposit -> cannotComplete", async () => {
-    const config = getPlasmaTestnetConfig();
+    const config = getLiveConfig();
     const client = getSigner(1);
     const agent = getSigner(2);
     const clientSdk = new ClientSDK(config, client);
@@ -324,7 +381,7 @@ descFlow("path-d")("SDK live Path D flow (Plasma testnet)", () => {
 
 descFlow("path-b-concede")("SDK live Path B concede flow (Plasma testnet)", () => {
   it("full Path B concede: create -> accept -> deposit -> assert -> dispute -> settleAgentConceded", async () => {
-    const config = getPlasmaTestnetConfig();
+    const config = getLiveConfig();
     const client = getSigner(1);
     const agent = getSigner(2);
     const clientSdk = new ClientSDK(config, client);
@@ -375,7 +432,7 @@ descFlow("path-b-uma-client")("SDK live Path B UMA client wins (Plasma testnet)"
 });
 
 async function runPathBUMA(agentWins: boolean): Promise<void> {
-  const config = getPlasmaTestnetConfig();
+  const config = getLiveConfig();
   const deployment = loadPlasmaDeployment();
   const mockOOv3Addr =
     deployment?.contracts?.MockOOv3 ?? config.mockOOv3Address;
