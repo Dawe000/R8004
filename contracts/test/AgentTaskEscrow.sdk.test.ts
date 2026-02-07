@@ -59,6 +59,26 @@ describe("AgentTaskEscrow - SDK (All Flows)", function () {
       expect(delta).to.equal(paymentAmount + stakeAmount);
     });
 
+    it("settleNoContest reverts when called before cooldown", async function () {
+      const { mockToken, clientSdk, agentSdk } = await loadFixture(sdkFixture);
+      const paymentAmount = ethers.parseEther("100");
+      const stakeAmount = ethers.parseEther("10");
+      const deadline = Math.floor(Date.now() / 1000) + 86400;
+      const tokenAddr = await mockToken.getAddress();
+
+      await clientSdk.createTask(
+        "ipfs://description",
+        tokenAddr,
+        paymentAmount,
+        deadline
+      );
+      await agentSdk.acceptTask(0n, stakeAmount);
+      await clientSdk.depositPayment(0n);
+      await agentSdk.assertCompletion(0n, "Task completed");
+      // do not advance cooldown
+      await expect(agentSdk.settleNoContest(0n)).to.be.rejected;
+    });
+
     it("market maker receives fee via SDK", async function () {
       const f = await deployFixtureWithFee(10);
       const chainId = (await ethers.provider.getNetwork()).chainId;

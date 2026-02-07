@@ -55,9 +55,12 @@ const agentSdk = new AgentSDK(config, wallet);
 
 ## Client SDK
 
+The escrow uses a **token whitelist**: only allowed tokens can be used as payment or stake token in `createTask`. Use `isTokenAllowed(tokenAddress)` to check before creating a task. `createTask` validates both tokens and throws a clear error if not allowed.
+
 | Method | Description |
 |--------|-------------|
-| `createTask(descriptionUriOrSpec, paymentToken, paymentAmount, deadline)` | Create task. Pass URI (ipfs://, https://), plain text, or JSON spec. Plain text and JSON upload to IPFS (requires `config.ipfs`). |
+| `createTask(descriptionUriOrSpec, paymentToken, paymentAmount, deadline, stakeToken?)` | Create task. Pass URI (ipfs://, https://), plain text, or JSON spec. Optional `stakeToken`: when set, agent stakes in this token (default: payment token). Validates payment and stake tokens are whitelisted. |
+| `isTokenAllowed(tokenAddress)` | Returns whether the token is in the escrow's allowed list for payments and staking. |
 | `depositPayment(taskId)` | Deposit payment (approves token if needed). |
 | `disputeTask(taskId, evidenceUriOrObject)` | Dispute asserted result. |
 | `settleAgentConceded(taskId)` | Settle when agent conceded (no UMA escalation). |
@@ -73,7 +76,8 @@ const agentSdk = new AgentSDK(config, wallet);
 
 | Method | Description |
 |--------|-------------|
-| `acceptTask(taskId, stakeAmount)` | Accept task with stake. |
+| `acceptTask(taskId, stakeAmount)` | Accept task with stake (uses task's stake token or payment token). |
+| `isTokenAllowed(tokenAddress)` | Returns whether the token is in the escrow's allowed list (for UI or pre-checks). |
 | `assertCompletion(taskId, result, resultUriOrObject?)` | Assert completion (hashes result, signs, submits). Optional result URI string (ipfs://, https://), plain text to upload, or JSON object to upload. Client can fetch result from task.resultURI. |
 | `escalateToUMA(taskId, evidenceUriOrObject)` | Escalate dispute to UMA. |
 | `settleNoContest(taskId)` | Settle after cooldown with no dispute. |
@@ -90,6 +94,7 @@ Standalone functions (Provider-only, no signer required):
 | Function | Description |
 |----------|-------------|
 | `getNextTaskId(escrowAddress, provider)` | Get next task ID (total task count). |
+| `getTokenAllowed(escrowAddress, provider, tokenAddress)` | Check whether a token is in the escrow's whitelist (provider-only). |
 | `getTask(escrowAddress, provider, taskId)` | Fetch task by ID. |
 | `getTaskDescriptionUri(escrowAddress, provider, taskId)` | Fetch task description URI from TaskCreated event (null if none). |
 | `getEscalatedDisputes(escrowAddress, provider, fromBlock, toBlock?)` | Fetch escalated disputes from TaskDisputeEscalated events (event-based). |

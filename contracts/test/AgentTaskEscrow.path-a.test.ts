@@ -18,7 +18,8 @@ describe("AgentTaskEscrow - Path A (Happy Path)", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
 
     logStep("acceptTask", { taskId: 0, agent: await agent.getAddress(), stakeAmount: stakeAmount.toString() });
@@ -60,7 +61,8 @@ describe("AgentTaskEscrow - Path A (Happy Path)", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
     await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
     await escrow.connect(agent).acceptTask(0, stakeAmount);

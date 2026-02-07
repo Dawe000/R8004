@@ -41,16 +41,33 @@ export class ClientSDK {
     return escrow.paymentDeposited(taskId);
   }
 
+  /** Check whether a token is in the escrow's allowed (whitelist) set for payments and staking */
+  async isTokenAllowed(tokenAddress: string): Promise<boolean> {
+    const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
+    return escrow.allowedTokens(tokenAddress);
+  }
+
   /**
    * Create task. Pass descriptionURI string (ipfs://, https://, etc.), plain text to upload to IPFS,
    * or spec object to upload to IPFS. Plain text and spec require config.ipfs.
+   * Optional stakeToken: when set, agent stakes in this token (default: paymentToken).
+   * Validates that payment and stake tokens are in the escrow whitelist before submitting.
    */
   async createTask(
     descriptionUriOrSpec: string | Record<string, unknown>,
     paymentToken: string,
     paymentAmount: bigint,
-    deadline: number | bigint
+    deadline: number | bigint,
+    stakeToken?: string
   ): Promise<bigint> {
+    if (!(await this.isTokenAllowed(paymentToken))) {
+      throw new Error("Payment token is not allowed by this escrow");
+    }
+    const stakeTokenAddr = stakeToken ?? "0x0000000000000000000000000000000000000000";
+    if (stakeTokenAddr !== "0x0000000000000000000000000000000000000000" && !(await this.isTokenAllowed(stakeTokenAddr))) {
+      throw new Error("Stake token is not allowed by this escrow");
+    }
+
     let uri: string;
     if (typeof descriptionUriOrSpec === "string") {
       if (isLikelyUri(descriptionUriOrSpec)) {
@@ -70,12 +87,9 @@ export class ClientSDK {
 
     const escrow = getEscrowContract(this.config.escrowAddress, this.signer);
     const nextId = await escrow.nextTaskId();
-    await (await escrow.createTask(
-      uri,
-      paymentToken,
-      paymentAmount,
-      BigInt(deadline)
-    )).wait();
+    await (
+      await escrow.createTask(uri, paymentToken, paymentAmount, BigInt(deadline), stakeTokenAddr)
+    ).wait();
     return nextId;
   }
 

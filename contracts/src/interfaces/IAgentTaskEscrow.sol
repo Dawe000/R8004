@@ -19,6 +19,7 @@ interface IAgentTaskEscrow {
         address client;
         address agent;
         address paymentToken;
+        address stakeToken;
         uint256 paymentAmount;
         uint256 agentStake;
         uint256 createdAt;
@@ -50,7 +51,8 @@ interface IAgentTaskEscrow {
         string calldata descriptionURI,
         address paymentToken,
         uint256 paymentAmount,
-        uint256 deadline
+        uint256 deadline,
+        address stakeToken
     ) external returns (uint256 taskId);
 
     function acceptTask(uint256 taskId, uint256 stakeAmount) external;

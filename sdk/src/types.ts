@@ -21,6 +21,7 @@ export interface Task {
   client: string;
   agent: string;
   paymentToken: string;
+  stakeToken: string;
   paymentAmount: bigint;
   agentStake: bigint;
   createdAt: bigint;

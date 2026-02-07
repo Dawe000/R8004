@@ -17,7 +17,8 @@ describe("AgentTaskEscrow - Path B (Dispute, Agent Concedes)", function () {
       "ipfs://description",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
 
     await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);

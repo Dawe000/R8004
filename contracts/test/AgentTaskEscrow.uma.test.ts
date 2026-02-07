@@ -15,7 +15,8 @@ describe("AgentTaskEscrow - UMA", function () {
       "ipfs://desc",
       await mockToken.getAddress(),
       paymentAmount,
-      deadline
+      deadline,
+      ethers.ZeroAddress
     );
     await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount + ethers.parseEther("1000"));
     await escrow.connect(agent).acceptTask(0, stakeAmount);

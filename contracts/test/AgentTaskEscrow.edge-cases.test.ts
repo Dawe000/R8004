@@ -13,7 +13,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 
@@ -33,7 +33,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 
@@ -52,7 +52,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 
@@ -73,7 +73,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
       await mockToken.connect(client).approve(await escrow.getAddress(), paymentAmount);
@@ -98,7 +98,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
       await mockToken.connect(client).approve(await escrow.getAddress(), paymentAmount);
@@ -127,7 +127,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
       await mockToken.connect(client).approve(await escrow.getAddress(), paymentAmount);
@@ -149,7 +149,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
       await mockToken.connect(client).approve(await escrow.getAddress(), paymentAmount + ethers.parseEther("1000"));
@@ -177,7 +177,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 
@@ -194,7 +194,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 60;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 
@@ -214,7 +214,7 @@ describe("AgentTaskEscrow - Edge Cases", function () {
       const stakeAmount = ethers.parseEther("10");
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
-      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline);
+      await escrow.connect(client).createTask("ipfs://desc", await mockToken.getAddress(), paymentAmount, deadline, ethers.ZeroAddress);
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
 

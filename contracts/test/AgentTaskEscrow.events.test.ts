@@ -19,7 +19,8 @@ describe("AgentTaskEscrow - Events", function () {
           "ipfs://description",
           await mockToken.getAddress(),
           paymentAmount,
-          deadline
+          deadline,
+          ethers.ZeroAddress
         )
       )
         .to.emit(escrow, "TaskCreated")
@@ -64,7 +65,8 @@ describe("AgentTaskEscrow - Events", function () {
         "ipfs://description",
         await mockToken.getAddress(),
         paymentAmount,
-        deadline
+        deadline,
+        ethers.ZeroAddress
       );
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
@@ -104,7 +106,8 @@ describe("AgentTaskEscrow - Events", function () {
         "ipfs://description",
         await mockToken.getAddress(),
         paymentAmount,
-        deadline
+        deadline,
+        ethers.ZeroAddress
       );
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount + ethers.parseEther("1000"));
       await escrow.connect(agent).acceptTask(0, stakeAmount);
@@ -157,7 +160,8 @@ describe("AgentTaskEscrow - Events", function () {
         "ipfs://description",
         await mockToken.getAddress(),
         paymentAmount,
-        deadline
+        deadline,
+        ethers.ZeroAddress
       );
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);
@@ -184,7 +188,8 @@ describe("AgentTaskEscrow - Events", function () {
         "ipfs://description",
         await mockToken.getAddress(),
         paymentAmount,
-        deadline
+        deadline,
+        ethers.ZeroAddress
       );
       await mockToken.connect(agent).approve(await escrow.getAddress(), stakeAmount);
       await escrow.connect(agent).acceptTask(0, stakeAmount);

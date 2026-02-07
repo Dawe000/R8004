@@ -38,7 +38,13 @@ export {
   parseOnchainTaskSpec,
   fetchTaskSpecFromOnchainUri,
 } from "./taskSpec";
-export { getEscrowContract, getErc20Contract, parseTask, ensureAllowance } from "./contract";
+export {
+  getEscrowContract,
+  getErc20Contract,
+  parseTask,
+  ensureAllowance,
+  getTokenAllowed,
+} from "./contract";
 export type { TaskAction, EscrowTimingConfig, EscrowConfig, EscalatedDispute } from "./tasks";
 export {
   depositToVault,

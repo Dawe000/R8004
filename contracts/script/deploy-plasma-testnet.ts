@@ -32,7 +32,8 @@ async function main() {
     await mockOOv3.getAddress(),
     TESTNET_CONFIG.UMA_LIVENESS,
     ethers.keccak256(ethers.toUtf8Bytes("AGENT_TASK_V1")),
-    TESTNET_CONFIG.UMA_MINIMUM_BOND
+    TESTNET_CONFIG.UMA_MINIMUM_BOND,
+    [await mockToken.getAddress()]
   );
   await escrow.waitForDeployment();
 
