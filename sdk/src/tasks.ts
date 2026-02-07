@@ -255,6 +255,23 @@ export async function getTaskDescriptionUri(
   return args.descriptionURI ?? null;
 }
 
+/** Fetch block number when task was escalated to UMA. Returns null if no TaskDisputeEscalated event. */
+export async function getEscalationBlockForTask(
+  escrowAddress: string,
+  provider: Provider,
+  taskId: bigint,
+  fromBlock?: number | bigint
+): Promise<number | null> {
+  const escrow = getEscrowContract(escrowAddress, provider);
+  const filter = escrow.filters.TaskDisputeEscalated?.(taskId);
+  if (!filter) return null;
+  const start = fromBlock !== undefined ? BigInt(fromBlock) : 0n;
+  const events = await queryFilterChunked(escrow, filter, start, provider);
+  const first = events[0];
+  if (!first || !first.blockNumber) return null;
+  return first.blockNumber;
+}
+
 /** Escrow timing and bond config */
 export interface EscrowConfig {
   cooldownPeriod: bigint;

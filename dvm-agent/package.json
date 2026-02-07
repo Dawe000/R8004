@@ -1,0 +1,21 @@
+{
+  "name": "dvm-agent",
+  "version": "1.0.0",
+  "description": "UMA dispute resolution agent for AgentTaskEscrow - Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@erc8001/agent-task-sdk": "file:../sdk",
+    "ethers": "^6.9.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260206.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.63.0"
+  }
+}

@@ -9,6 +9,7 @@
     "deploy:sandbox": "hardhat run script/deploy-sandbox.ts",
     "deploy:plasma": "hardhat run script/deploy-plasma-testnet.ts --network plasma-testnet",
     "print-addresses": "hardhat run script/print-testnet-addresses.ts",
+    "print-deployer-pk": "hardhat run script/print-deployer-pk.ts",
     "testnet:flow": "hardhat run script/run-testnet-flow.ts",
     "testnet:flow:path-c": "FLOW_PATH=path-c hardhat run script/run-testnet-flow.ts",
     "testnet:flow:path-a": "FLOW_PATH=path-a hardhat run script/run-testnet-flow.ts",

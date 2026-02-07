@@ -12,7 +12,7 @@ import {
   isInProgress,
 } from "./tasks";
 import { calculateResultHash, signTaskResult } from "./crypto";
-import { uploadJson } from "./ipfs";
+import { uploadJson, uploadText, isLikelyUri } from "./ipfs";
 
 export class AgentSDK {
   constructor(

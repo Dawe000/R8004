@@ -12,12 +12,12 @@ export {
 } from "./config";
 export type {
   Task,
-  TaskStatus,
   TaskMatchRequest,
   TaskMatchResponse,
   RankedAgent,
   AgentCapabilityCard,
 } from "./types";
+export { TaskStatus } from "./types";
 export { calculateResultHash, signTaskResult } from "./crypto";
 export {
   uploadJson,
@@ -36,6 +36,7 @@ export {
   getNextTaskId,
   getTask,
   getTaskDescriptionUri,
+  getEscalationBlockForTask,
   getEscrowConfig,
   getTasksByIdRange,
   getTasksByClient,

@@ -12,7 +12,7 @@ import {
   getClientTasksNeedingAction,
   isInProgress,
 } from "./tasks";
-import { uploadJson, fetchTaskEvidence } from "./ipfs";
+import { uploadJson, uploadText, fetchTaskEvidence, isLikelyUri } from "./ipfs";
 import { matchAgents } from "./marketmaker";
 
 export class ClientSDK {
