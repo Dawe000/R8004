@@ -4,7 +4,7 @@ import { defineChain } from 'viem';
 const plasmaTestnet = defineChain({
   id: 9746,
   name: 'Plasma Testnet',
-  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  nativeCurrency: { name: 'XPL', symbol: 'XPL', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://testnet-rpc.plasma.to'] },
     public: { http: ['https://testnet-rpc.plasma.to'] },
