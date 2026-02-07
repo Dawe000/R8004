@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -12,7 +13,7 @@ import "./interfaces/IAgentTaskEscrow.sol";
  * @title AgentTaskEscrow
  * @notice ERC8001 Agent Task System - escrow for agent tasks with UMA dispute resolution
  */
-contract AgentTaskEscrow is IAgentTaskEscrow {
+contract AgentTaskEscrow is IAgentTaskEscrow, Ownable {
     using SafeERC20 for IERC20;
 
     struct OOv3Config {
@@ -63,7 +64,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         bytes32 _umaIdentifier,
         uint256 _umaMinimumBond,
         address[] memory _allowedTokens
-    ) {
+    ) Ownable(msg.sender) {
         marketMaker = _marketMaker;
         marketMakerFeeBps = _marketMakerFeeBps;
         cooldownPeriod = _cooldownPeriod;
@@ -278,6 +279,16 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
 
     function getTask(uint256 taskId) external view returns (Task memory) {
         return tasks[taskId];
+    }
+
+    /** Add a token to the allowed (whitelist) set. Only owner. */
+    function addAllowedToken(address token) external onlyOwner {
+        allowedTokens[token] = true;
+    }
+
+    /** Remove a token from the allowed set. Only owner. */
+    function removeAllowedToken(address token) external onlyOwner {
+        allowedTokens[token] = false;
     }
 
     mapping(bytes32 => uint256) private _assertionToTask;
