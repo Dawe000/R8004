@@ -1,14 +1,14 @@
 // Multi-agent Cloudflare Worker for ERC8001 example agents (routes /1 through /10)
-import agentCard1 from './agent-cards/agent-1.json' assert { type: 'json' };
-import agentCard2 from './agent-cards/agent-2.json' assert { type: 'json' };
-import agentCard3 from './agent-cards/agent-3.json' assert { type: 'json' };
-import agentCard4 from './agent-cards/agent-4.json' assert { type: 'json' };
-import agentCard5 from './agent-cards/agent-5.json' assert { type: 'json' };
-import agentCard6 from './agent-cards/agent-6.json' assert { type: 'json' };
-import agentCard7 from './agent-cards/agent-7.json' assert { type: 'json' };
-import agentCard8 from './agent-cards/agent-8.json' assert { type: 'json' };
-import agentCard9 from './agent-cards/agent-9.json' assert { type: 'json' };
-import agentCard10 from './agent-cards/agent-10.json' assert { type: 'json' };
+import agentCard1 from './agent-cards/agent-1.json' with { type: 'json' };
+import agentCard2 from './agent-cards/agent-2.json' with { type: 'json' };
+import agentCard3 from './agent-cards/agent-3.json' with { type: 'json' };
+import agentCard4 from './agent-cards/agent-4.json' with { type: 'json' };
+import agentCard5 from './agent-cards/agent-5.json' with { type: 'json' };
+import agentCard6 from './agent-cards/agent-6.json' with { type: 'json' };
+import agentCard7 from './agent-cards/agent-7.json' with { type: 'json' };
+import agentCard8 from './agent-cards/agent-8.json' with { type: 'json' };
+import agentCard9 from './agent-cards/agent-9.json' with { type: 'json' };
+import agentCard10 from './agent-cards/agent-10.json' with { type: 'json' };
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
