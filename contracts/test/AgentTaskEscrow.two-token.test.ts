@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { deployFixture } from "./helpers/fixtures";
+import { deployFixtureWithAllowedTokens } from "./helpers/fixtures";
 import {
   advanceCooldown,
   advancePastDeadline,
@@ -9,16 +9,27 @@ import {
 } from "./helpers/time";
 import { calculateResultHash, signTaskResult } from "./helpers/crypto";
 
+/** Deploy payment and stake tokens, mint, and deploy escrow with both whitelisted. */
+async function setupTwoTokens() {
+  const MockERC20 = await ethers.getContractFactory("MockERC20");
+  const mockToken = await MockERC20.deploy("Test Token", "TST", 18);
+  await mockToken.waitForDeployment();
+  const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
+  await stakeToken.waitForDeployment();
+  const mintAmount = ethers.parseEther("1000000");
+  await mockToken.mint((await ethers.getSigners())[0].getAddress(), mintAmount);
+  await mockToken.mint((await ethers.getSigners())[1].getAddress(), mintAmount);
+  await stakeToken.mint((await ethers.getSigners())[1].getAddress(), mintAmount);
+  const { escrow, mockOOv3, client, agent } = await deployFixtureWithAllowedTokens([
+    await mockToken.getAddress(),
+    await stakeToken.getAddress(),
+  ]);
+  return { escrow, mockOOv3, mockToken, stakeToken, client, agent };
+}
+
 describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   it("happy path: payment in paymentToken, stake in stakeToken, agent receives both correctly", async function () {
-    const { escrow, mockToken, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-
-    const mintAmount = ethers.parseEther("1000000");
-    await stakeToken.mint(await agent.getAddress(), mintAmount);
+    const { escrow, mockToken, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");
@@ -57,12 +68,7 @@ describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   });
 
   it("timeoutCancellation: client receives payment in paymentToken, slashed stake in stakeToken", async function () {
-    const { escrow, mockToken, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-    await stakeToken.mint(await agent.getAddress(), ethers.parseEther("1000000"));
+    const { escrow, mockToken, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");
@@ -96,12 +102,7 @@ describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   });
 
   it("cannotComplete: agent gets stake back in stakeToken, client gets payment in paymentToken", async function () {
-    const { escrow, mockToken, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-    await stakeToken.mint(await agent.getAddress(), ethers.parseEther("1000000"));
+    const { escrow, mockToken, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");
@@ -133,12 +134,7 @@ describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   });
 
   it("settleAgentConceded: client receives payment+bond in paymentToken, slashed stake in stakeToken", async function () {
-    const { escrow, mockToken, mockOOv3, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-    await stakeToken.mint(await agent.getAddress(), ethers.parseEther("1000000"));
+    const { escrow, mockToken, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");
@@ -180,12 +176,7 @@ describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   });
 
   it("UMA agent wins: agent receives payment+bonds in paymentToken, stake in stakeToken", async function () {
-    const { escrow, mockToken, mockOOv3, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-    await stakeToken.mint(await agent.getAddress(), ethers.parseEther("1000000"));
+    const { escrow, mockToken, mockOOv3, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");
@@ -233,12 +224,7 @@ describe("AgentTaskEscrow - Two-token (payment vs stake)", function () {
   });
 
   it("UMA client wins: client receives payment+bonds in paymentToken, slashed stake in stakeToken", async function () {
-    const { escrow, mockToken, mockOOv3, client, agent } = await deployFixture();
-
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    const stakeToken = await MockERC20.deploy("Stake Token", "STAKE", 18);
-    await stakeToken.waitForDeployment();
-    await stakeToken.mint(await agent.getAddress(), ethers.parseEther("1000000"));
+    const { escrow, mockToken, mockOOv3, stakeToken, client, agent } = await setupTwoTokens();
 
     const paymentAmount = ethers.parseEther("100");
     const stakeAmount = ethers.parseEther("10");

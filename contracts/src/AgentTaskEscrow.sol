@@ -34,6 +34,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     uint256 public escalationBondBps;
 
     OOv3Config public umaConfig;
+    mapping(address => bool) public allowedTokens;
 
     error TaskNotFound(uint256 taskId);
     error TaskAlreadyAccepted(uint256 taskId);
@@ -48,6 +49,7 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
     error InvalidSignature(address expected, address recovered);
     error InvalidResultHash(bytes32 expected, bytes32 provided);
     error InvalidCaller();
+    error TokenNotAllowed(address token);
 
     constructor(
         address _marketMaker,
@@ -59,7 +61,8 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         address _umaOracle,
         uint64 _umaLiveness,
         bytes32 _umaIdentifier,
-        uint256 _umaMinimumBond
+        uint256 _umaMinimumBond,
+        address[] memory _allowedTokens
     ) {
         marketMaker = _marketMaker;
         marketMakerFeeBps = _marketMakerFeeBps;
@@ -68,6 +71,9 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         disputeBondBps = _disputeBondBps;
         escalationBondBps = _escalationBondBps;
         umaConfig = OOv3Config(_umaOracle, _umaLiveness, _umaIdentifier, _umaMinimumBond);
+        for (uint256 i = 0; i < _allowedTokens.length; i++) {
+            allowedTokens[_allowedTokens[i]] = true;
+        }
     }
 
     function createTask(
@@ -77,6 +83,9 @@ contract AgentTaskEscrow is IAgentTaskEscrow {
         uint256 deadline,
         address stakeToken
     ) external returns (uint256 taskId) {
+        if (!allowedTokens[paymentToken]) revert TokenNotAllowed(paymentToken);
+        if (stakeToken != address(0) && !allowedTokens[stakeToken]) revert TokenNotAllowed(stakeToken);
+
         taskId = nextTaskId++;
         tasks[taskId] = Task({
             id: taskId,
