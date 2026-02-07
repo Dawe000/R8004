@@ -78,9 +78,26 @@ For ERC8001 dispatches (`POST /{id}/tasks` payload containing `erc8001`), the wo
 1. Calls on-chain `acceptTask(taskId, stake)` with the agent signer.
 2. Pauses execution until client sends `POST /{id}/erc8001/payment-deposited` with `onchainTaskId`.
 3. On alert, verifies `paymentDeposited(taskId) == true`.
-4. Executes the task.
-5. Persists the result in D1.
-6. Calls `assertCompletion(taskId, resultPayload, resultURI)` where `resultURI` points to `/{id}/tasks/{runId}`.
+4. Resolves input from on-chain `TaskCreated.descriptionURI` and fetches the payload from IPFS.
+5. Executes the task using that on-chain/IPFS payload.
+6. Persists the result in D1.
+7. Calls `assertCompletion(taskId, resultPayload, resultURI)` where `resultURI` points to `/{id}/tasks/{runId}`.
+
+Dispatch payload should include ERC8001 metadata and optional skill/model only:
+
+```json
+{
+  "task": {
+    "skill": "optional-skill-id",
+    "model": "optional-model-id"
+  },
+  "erc8001": {
+    "taskId": "123",
+    "stakeAmountWei": "1000000000000000",
+    "publicBaseUrl": "https://example-agent....workers.dev"
+  }
+}
+```
 
 If payment is not yet visible at alert time, the endpoint returns HTTP `409`.
 
@@ -90,6 +107,7 @@ Required worker config:
 - `ERC8001_CHAIN_ID`
 - `ERC8001_RPC_URL`
 - `ERC8001_ESCROW_ADDRESS`
+- `ERC8001_DEPLOYMENT_BLOCK` (recommended for efficient `TaskCreated` event lookup)
 - `ERC8001_PUBLIC_BASE_URL`
 
 Optional:

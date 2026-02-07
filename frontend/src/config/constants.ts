@@ -25,4 +25,10 @@ export const FIRELIGHT_VAULT_ADDRESS = NETWORKS.COSTON2.firelightVaultAddress;
 export const MOCK_OOV3_ADDRESS = NETWORKS.COSTON2.mockOOv3Address;
 export const DEPLOYMENT_BLOCK = NETWORKS.COSTON2.deploymentBlock.toString();
 
-export const MARKET_MAKER_URL = 'https://market-maker-agent.lynethlabs.workers.dev/api';
+export const MARKET_MAKER_URL =
+  process.env.NEXT_PUBLIC_MARKET_MAKER_URL ||
+  'https://market-maker-agent.lynethlabs.workers.dev/api';
+
+export const AGENTS_BASE_URL =
+  process.env.NEXT_PUBLIC_AGENTS_BASE_URL ||
+  'https://example-agent.lynethlabs.workers.dev';

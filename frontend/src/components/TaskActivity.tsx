@@ -6,7 +6,7 @@ import { useAccount } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
-import { notifyErc8001PaymentDeposited } from '@/lib/api/marketMaker';
+import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
 import { getTaskDispatchMeta } from '@/lib/taskMeta';
 import {
   Dialog,
@@ -144,7 +144,8 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
   const statusInfo = STATUS_MAP[task.status] || { label: 'Pending', color: 'text-gray-400', icon: Clock };
   const StatusIcon = statusInfo.icon;
-  const isTaskClient = Boolean(address) && address.toLowerCase() === task.client.toLowerCase();
+  const normalizedAddress = address?.toLowerCase();
+  const isTaskClient = Boolean(normalizedAddress && normalizedAddress === task.client.toLowerCase());
   const canDepositHere =
     task.status === TaskStatus.Accepted &&
     paymentDeposited === false &&
@@ -179,7 +180,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     setIsNotifyingPayment(true);
     const notifyToastId = toast.loading('Notifying agent that payment was deposited...');
     try {
-      await notifyErc8001PaymentDeposited({
+      await notifyErc8001PaymentDepositedDirect({
         agentId: dispatchMeta.agentId,
         onchainTaskId: task.id.toString(),
       });

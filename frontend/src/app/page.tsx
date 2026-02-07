@@ -20,12 +20,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
-import { MOCK_TOKEN_ADDRESS } from '@/config/constants';
-import { dispatchErc8001Task, notifyErc8001PaymentDeposited } from '@/lib/api/marketMaker';
+import {
+  createTaskSpecUri,
+  dispatchErc8001TaskDirect,
+  notifyErc8001PaymentDepositedDirect,
+} from '@/lib/api/agents';
 import { getTaskDispatchMeta, upsertTaskDispatchMeta } from '@/lib/taskMeta';
 import { formatEther, parseEther } from 'ethers';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { TaskStatus, type Task } from '@sdk/types';
+import {
+  COSTON2_FIRELIGHT_DEFAULTS,
+  ONCHAIN_TASK_SPEC_V1,
+  PLASMA_TESTNET_DEFAULTS,
+} from '@sdk/index';
 import { toast } from 'sonner';
 
 const TASK_STATUS_LABELS: Record<number, string> = {
@@ -48,6 +56,7 @@ const TERMINAL_STATUSES = new Set<number>([
 
 export default function Home() {
   const { address } = useAccount();
+  const chainId = useChainId();
   const [query, setQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('0.00');
@@ -67,6 +76,10 @@ export default function Home() {
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
   const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
+  const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
+  const paymentTokenAddress = isPlasmaChain
+    ? PLASMA_TESTNET_DEFAULTS.mockTokenAddress
+    : COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress;
 
   const selectedAgent = useMemo(() => {
     if (!selectedAgentId || !agents) return null;
@@ -80,7 +93,7 @@ export default function Home() {
   }, [selectedAgent]);
 
   const { data: balance } = useReadContract({
-    address: MOCK_TOKEN_ADDRESS as `0x${string}`,
+    address: paymentTokenAddress as `0x${string}`,
     abi: [
       {
         name: 'balanceOf',
@@ -163,25 +176,38 @@ export default function Home() {
     const toastId = toast.loading('Creating task intent on-chain...');
 
     try {
+      if (!isPlasmaChain) {
+        throw new Error(
+          `Direct agent execution currently supports Plasma only. Switch wallet network to Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}).`
+        );
+      }
+
       if (!selectedAgent.agent.sla?.minAcceptanceStake) {
         throw new Error('Selected agent is missing minAcceptanceStake');
       }
 
       const amount = parseEther(paymentAmount);
 
+      const taskSpecUri = await createTaskSpecUri({
+        version: ONCHAIN_TASK_SPEC_V1,
+        input: query.trim(),
+        ...(selectedAgent.agent.skills?.[0]?.id ? { skill: selectedAgent.agent.skills[0].id } : {}),
+        ...(address ? { client: address } : {}),
+        createdAt: new Date().toISOString(),
+      });
+
       const taskId = await sdk.client.createTask(
-        query,
-        MOCK_TOKEN_ADDRESS,
+        taskSpecUri,
+        paymentTokenAddress,
         amount,
         deadline
       );
 
-      toast.loading('Dispatching to selected agent via marketmaker...', { id: toastId });
+      toast.loading('Dispatching task directly to selected agent...', { id: toastId });
 
-      const dispatchResult = await dispatchErc8001Task({
+      const dispatchResult = await dispatchErc8001TaskDirect({
         agentId: selectedAgent.agent.agentId,
         onchainTaskId: taskId.toString(),
-        input: query,
         stakeAmountWei: selectedAgent.agent.sla.minAcceptanceStake,
         skill: selectedAgent.agent.skills?.[0]?.id,
       });
@@ -226,7 +252,7 @@ export default function Home() {
       setIsNotifyingPayment(true);
       const notifyToastId = toast.loading('Notifying agent that payment was deposited...');
       try {
-        await notifyErc8001PaymentDeposited({
+        await notifyErc8001PaymentDepositedDirect({
           agentId: dispatchMeta.agentId,
           onchainTaskId: taskId.toString(),
         });

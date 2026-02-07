@@ -35,6 +35,7 @@ import agentCard33 from './agent-cards/agent-33.json' assert { type: 'json' };
 import agentCard34 from './agent-cards/agent-34.json' assert { type: 'json' };
 import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
 import { AgentSDK } from '../sdk/src/agent.ts';
+import { fetchTaskSpecFromOnchainUri } from '../sdk/src/taskSpec.ts';
 import { JsonRpcProvider, Wallet } from '../sdk/node_modules/ethers/lib.esm/index.js';
 const TASK_STATUS = {
   SUBMITTED: 'submitted',
@@ -551,14 +552,14 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
   try {
     const body = await parseRequestBody(request);
     const input = extractInput(body);
+    const erc8001Request = parseErc8001Request(body);
 
-    if (!input) {
+    if (!input && !erc8001Request) {
       return jsonResponse({ error: 'No input provided for task.' }, 400, corsHeaders);
     }
 
     const skillId = resolveSkillId(agent, body);
     const modelRequested = resolveRequestedModel(agent, body, env);
-    const erc8001Request = parseErc8001Request(body);
     const now = nowIso();
     const forceExpired = isTruthy(url.searchParams.get('forceExpired')) || isTruthy(request.headers.get('x-force-expired'));
     const expiresAt = forceExpired ? addDaysIso(-1) : addDaysIso(TASK_RETENTION_DAYS);
@@ -681,25 +682,32 @@ function extractInput(body) {
     return '';
   }
 
-  const input =
+  const explicitInput =
     body?.task?.input ??
     body?.input ??
     body?.prompt ??
-    body?.text ??
-    body;
+    body?.text;
 
-  if (typeof input === 'string') {
-    return input.trim();
-  }
-
-  if (typeof input === 'object' && input !== null) {
-    if (typeof input.text === 'string') {
-      return input.text.trim();
+  if (explicitInput == null) {
+    // ERC8001 tasks resolve canonical input from on-chain description URI.
+    if (body?.erc8001?.taskId) {
+      return '';
     }
-    return JSON.stringify(input, null, 2);
+    return typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body || '').trim();
   }
 
-  return String(input || '').trim();
+  if (typeof explicitInput === 'string') {
+    return explicitInput.trim();
+  }
+
+  if (typeof explicitInput === 'object' && explicitInput !== null) {
+    if (typeof explicitInput.text === 'string') {
+      return explicitInput.text.trim();
+    }
+    return JSON.stringify(explicitInput, null, 2);
+  }
+
+  return String(explicitInput || '').trim();
 }
 
 async function processAgentTask(agent, body, inputText, env, options = {}) {
@@ -965,15 +973,20 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
   }
 
   const body = safeJsonParse(task.request_payload_json) || {};
+  const existingMeta = safeJsonParse(task.response_meta_json) || {};
 
   try {
     const erc8001Request = parseErc8001Request(body);
     let erc8001Meta = null;
+    let executionBody = body;
+    let executionInputText = task.input_text;
+    let executionSkillId = task.skill_id || undefined;
+    let executionModelRequested = task.model_requested || undefined;
+
     if (erc8001Request) {
       erc8001Meta = await acceptTaskIfNeeded(env, task, erc8001Request);
       const deposited = await isPaymentDeposited(env, erc8001Request.taskId);
       if (!deposited) {
-        const existingMeta = safeJsonParse(task.response_meta_json) || {};
         await updateTaskResponseMeta(env, task.id, {
           ...existingMeta,
           erc8001: {
@@ -992,11 +1005,37 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
         awaitingPaymentAlert: false,
         resumedBy: payload.resumeReason || 'initial-queue-run',
       };
+
+      try {
+        const resolved = await resolveErc8001ExecutionContext(env, erc8001Request);
+        executionInputText = resolved.parsed.input;
+        executionSkillId = resolved.parsed.skill || executionSkillId;
+        executionModelRequested = resolved.parsed.model || executionModelRequested;
+        executionBody = mergeExecutionBodyFromSpec(body, resolved.parsed);
+        erc8001Meta = {
+          ...erc8001Meta,
+          inputSource: 'onchain-ipfs',
+          specVersion: resolved.parsed.version,
+          descriptionURI: resolved.descriptionURI,
+        };
+      } catch (error) {
+        const errorMessage = error?.message || 'Failed to resolve on-chain task spec';
+        const failedMeta = {
+          ...erc8001Meta,
+          inputSource: 'onchain-ipfs',
+          specError: errorMessage,
+        };
+        await updateTaskResponseMeta(env, task.id, {
+          ...existingMeta,
+          erc8001: failedMeta,
+        });
+        throw new Error(`ERC8001 task ${erc8001Request.taskId} spec resolution failed: ${errorMessage}`);
+      }
     }
 
-    const result = await processAgentTask(agent, body, task.input_text, env, {
-      skillId: task.skill_id || undefined,
-      modelRequested: task.model_requested || undefined,
+    const result = await processAgentTask(agent, executionBody, executionInputText, env, {
+      skillId: executionSkillId,
+      modelRequested: executionModelRequested,
       forceFailure: Boolean(payload.forceFailure),
     });
 
@@ -1075,6 +1114,31 @@ function parseErc8001Request(body) {
   };
 }
 
+function mergeExecutionBodyFromSpec(body, parsedSpec) {
+  const taskBody = body?.task && typeof body.task === 'object' ? body.task : {};
+  return {
+    ...body,
+    task: {
+      ...taskBody,
+      input: parsedSpec.input,
+      ...(parsedSpec.skill ? { skill: parsedSpec.skill } : {}),
+      ...(parsedSpec.model ? { model: parsedSpec.model } : {}),
+    },
+    ...(parsedSpec.skill ? { skill: parsedSpec.skill } : {}),
+    ...(parsedSpec.model ? { model: parsedSpec.model } : {}),
+  };
+}
+
+async function resolveErc8001ExecutionContext(env, erc8001Request) {
+  const { provider, escrowAddress, deploymentBlock } = await getErc8001Sdk(env);
+  return fetchTaskSpecFromOnchainUri(
+    escrowAddress,
+    provider,
+    BigInt(erc8001Request.taskId),
+    { fromBlock: deploymentBlock }
+  );
+}
+
 let erc8001SdkPromise = null;
 
 async function getErc8001Sdk(env) {
@@ -1087,6 +1151,12 @@ async function getErc8001Sdk(env) {
       const rpcUrl = env.ERC8001_RPC_URL || DEFAULT_ERC8001_RPC_URL;
       const chainId = Number(env.ERC8001_CHAIN_ID || DEFAULT_ERC8001_CHAIN_ID);
       const escrowAddress = env.ERC8001_ESCROW_ADDRESS || DEFAULT_ERC8001_ESCROW_ADDRESS;
+      const parsedDeploymentBlock = env.ERC8001_DEPLOYMENT_BLOCK
+        ? Number(env.ERC8001_DEPLOYMENT_BLOCK)
+        : NaN;
+      const deploymentBlock = Number.isFinite(parsedDeploymentBlock)
+        ? parsedDeploymentBlock
+        : undefined;
       const privateKey = env.AGENT_EVM_PRIVATE_KEY.trim();
 
       const provider = new JsonRpcProvider(rpcUrl);
@@ -1103,6 +1173,9 @@ async function getErc8001Sdk(env) {
 
       return {
         sdk,
+        provider,
+        escrowAddress,
+        deploymentBlock,
         address: await wallet.getAddress(),
       };
     })();

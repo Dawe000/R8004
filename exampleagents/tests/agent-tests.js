@@ -137,7 +137,7 @@ async function testVeniceResponse({ requireLocalKey }) {
     },
   };
 
-  const res = await fetch(`${BASE_URL}/1/tasks`, {
+  const res = await fetch(`${BASE_URL}/1/tasks?forceAsync=true`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -147,8 +147,14 @@ async function testVeniceResponse({ requireLocalKey }) {
     const errorText = await res.text();
     throw new Error(`Venice /tasks call failed with ${res.status}: ${errorText}`);
   }
-  const data = await res.json();
-  assert(data.status === 'completed', 'Venice /tasks did not complete');
+  const accepted = await res.json();
+  assert(accepted.id, 'Venice async response missing task id');
+  assert(accepted.status === 'running', `Venice async expected running, got ${accepted.status}`);
+
+  const polled = await pollTask('1', accepted.id, { channel: 'tasks', timeoutMs: 180000 });
+  assert(polled.done, 'Venice async task did not finish in time');
+  assert(polled.data.status === 'completed', `Venice async task ended with ${polled.data.status}`);
+  const data = polled.data;
 
   const output = data?.result?.output;
   const raw = data?.result?.raw;
@@ -291,6 +297,44 @@ async function testA2AParity() {
   assert(resultRes.ok, `A2A result update failed with ${resultRes.status}`);
 }
 
+async function testErc8001DispatchWithoutRawInput() {
+  if (!process.env.AGENT_EVM_PRIVATE_KEY) {
+    console.log('Skipping ERC8001 no-input dispatch test: AGENT_EVM_PRIVATE_KEY is not set in local env.');
+    return;
+  }
+
+  const cardRes = await fetch(`${BASE_URL}/1/card`);
+  assert(cardRes.ok, `Agent 1 card lookup failed with ${cardRes.status}`);
+  const card = await cardRes.json();
+  const firstSkillId = card?.skills?.[0]?.id;
+  assert(firstSkillId, 'Agent 1 card missing first skill id for ERC8001 dispatch test');
+
+  const createRes = await fetch(`${BASE_URL}/1/tasks?forceAsync=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      task: {
+        skill: firstSkillId,
+      },
+      erc8001: {
+        taskId: '999999999999',
+        stakeAmountWei: '1',
+        publicBaseUrl: BASE_URL,
+      },
+    }),
+  });
+
+  assert(createRes.status === 202, `Expected ERC8001 dispatch 202, received ${createRes.status}`);
+  const created = await createRes.json();
+  assert(created.id, 'ERC8001 dispatch response missing task id');
+  assert(created.status === 'running', `ERC8001 dispatch status expected running, got ${created.status}`);
+
+  const statusRes = await fetch(`${BASE_URL}/1/tasks/${created.id}`);
+  assert(statusRes.ok, `ERC8001 persisted task fetch failed with ${statusRes.status}`);
+  const status = await statusRes.json();
+  assert(status.id === created.id, 'ERC8001 persisted task id mismatch');
+}
+
 async function triggerScheduledCleanup() {
   const candidates = [
     `${BASE_URL}/__scheduled`,
@@ -381,6 +425,7 @@ async function run() {
     await testHealth();
     await testAgentCards(agentIds);
     await testFailurePersistence();
+    await testErc8001DispatchWithoutRawInput();
     if (!REMOTE) {
       await testRetentionCleanup();
     }

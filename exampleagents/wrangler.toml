@@ -8,6 +8,7 @@ account_id = "a279e1e82b5f3fb2904191364cb0e3f7"
 ERC8001_CHAIN_ID = "9746"
 ERC8001_RPC_URL = "https://testnet-rpc.plasma.to"
 ERC8001_ESCROW_ADDRESS = "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53"
+ERC8001_DEPLOYMENT_BLOCK = "14650825"
 ERC8001_PUBLIC_BASE_URL = "https://example-agent.lynethlabs.workers.dev"
 # Set AGENT_EVM_PRIVATE_KEY via:
 # wrangler secret put AGENT_EVM_PRIVATE_KEY

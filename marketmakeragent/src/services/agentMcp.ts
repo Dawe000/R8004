@@ -4,32 +4,6 @@ export interface AgentTaskRequest {
 	model?: string;
 }
 
-export interface Erc8001DispatchRequest {
-	onchainTaskId: string;
-	input: string;
-	stakeAmountWei: string;
-	skill?: string;
-	model?: string;
-	publicBaseUrl?: string;
-}
-
-export interface Erc8001DispatchResponse {
-	agentId: string;
-	runId: string;
-	status: 'accepted';
-	onchainTaskId: string;
-	statusUrl?: string;
-}
-
-export interface Erc8001PaymentDepositedRequest {
-	onchainTaskId: string;
-}
-
-export interface AgentPassthroughResponse {
-	status: number;
-	body: unknown;
-}
-
 export interface AgentTaskResult {
 	id: string;
 	status: string;
@@ -84,73 +58,6 @@ export class AgentMcpClient {
 		}
 
 		return response.json();
-	}
-
-	async dispatchErc8001Task(agentId: string, request: Erc8001DispatchRequest): Promise<Erc8001DispatchResponse> {
-		const payload = {
-			task: {
-				input: request.input,
-				skill: request.skill,
-				model: request.model,
-			},
-			erc8001: {
-				taskId: request.onchainTaskId,
-				stakeAmountWei: request.stakeAmountWei,
-				publicBaseUrl: request.publicBaseUrl || this.baseUrl,
-			},
-		};
-
-		const response = await fetch(`${this.baseUrl}/${agentId}/tasks?forceAsync=true`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(payload),
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`ERC8001 dispatch failed: ${response.status} ${errorText}`);
-		}
-
-		const data = (await response.json()) as { id?: string; statusUrl?: string };
-		if (!data.id) {
-			throw new Error('ERC8001 dispatch response missing run id');
-		}
-
-		return {
-			agentId,
-			runId: data.id,
-			status: 'accepted',
-			onchainTaskId: request.onchainTaskId,
-			statusUrl: data.statusUrl,
-		};
-	}
-
-	async notifyErc8001PaymentDeposited(
-		agentId: string,
-		request: Erc8001PaymentDepositedRequest
-	): Promise<AgentPassthroughResponse> {
-		const response = await fetch(`${this.baseUrl}/${agentId}/erc8001/payment-deposited`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ onchainTaskId: request.onchainTaskId }),
-		});
-
-		const text = await response.text();
-		let body: unknown;
-		try {
-			body = text ? JSON.parse(text) : {};
-		} catch {
-			body = { raw: text };
-		}
-
-		return {
-			status: response.status,
-			body,
-		};
 	}
 
 	async executeA2ATask(agentId: string, request: AgentTaskRequest): Promise<AgentTaskResult> {

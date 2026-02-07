@@ -32,6 +32,12 @@ export {
   fetchTaskEvidence,
 } from "./ipfs";
 export { matchAgents } from "./marketmaker";
+export type { OnchainTaskSpecV1, ParsedOnchainTaskSpec, TaskSpecFromOnchainUri } from "./taskSpec";
+export {
+  ONCHAIN_TASK_SPEC_V1,
+  parseOnchainTaskSpec,
+  fetchTaskSpecFromOnchainUri,
+} from "./taskSpec";
 export { getEscrowContract, getErc20Contract, parseTask, ensureAllowance } from "./contract";
 export type { TaskAction, EscrowTimingConfig, EscrowConfig, EscalatedDispute } from "./tasks";
 export {

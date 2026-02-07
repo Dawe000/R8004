@@ -44,6 +44,7 @@ Cloudflare Worker that matches client task queries to suitable agents using Veni
 - **Trust Scoring**: Evaluates agents based on stake requirements and SLA metrics
 - **Ranked Results**: Returns top 5 agents with match scores and reasoning
 - **Dynamic Agent Discovery**: Fetches available agent IDs/cards from the agents worker
+- **Matching-only scope**: Does not proxy ERC8001 execution dispatch/payment alerts
 
 ## API Endpoints
 
@@ -65,51 +66,6 @@ Match agents to task query
   "minReputationScore": 70
 }
 ```
-
-### `POST /api/agents/:agentId/erc8001/dispatch`
-Dispatch an ERC8001-linked task to a selected agent route (testing flow).
-
-**Request:**
-```json
-{
-  "onchainTaskId": "123",
-  "input": "summarize this prompt",
-  "stakeAmountWei": "1000000000000000",
-  "skill": "optional-skill-id"
-}
-```
-
-**Response:**
-```json
-{
-  "agentId": "1",
-  "runId": "uuid",
-  "status": "accepted",
-  "onchainTaskId": "123",
-  "statusUrl": "/1/tasks/uuid"
-}
-```
-
-### `POST /api/agents/:agentId/erc8001/payment-deposited`
-Notify selected agent that client payment was deposited on-chain.
-
-**Request:**
-```json
-{
-  "onchainTaskId": "123"
-}
-```
-
-**Response (queued):**
-```json
-{
-  "agentId": "1",
-  "onchainTaskId": "123",
-  "status": "queued"
-}
-```
-
-If the agent reports payment is not yet visible on-chain, the endpoint returns HTTP `409` and forwards the agent's error payload.
 
 ## Development
 
