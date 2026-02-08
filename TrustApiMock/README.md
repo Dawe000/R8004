@@ -7,6 +7,8 @@ Mock trust/reputation API for development and testing.
 - Used by the market maker for agent evaluation and `minReputationScore` filtering (see [TECHNICAL_SPEC](../docs/TECHNICAL_SPEC.md))
 - **Stack:** Cloudflare Worker + D1 (SQLite)
 
+**Reference:** [Lyneth Labs Whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper) — trust and reputation model.
+
 Agent identifiers (`agentId`) match the example agents in `exampleagents/` (routes `/1`–`/10`). No authentication in this mock (development only).
 
 ---

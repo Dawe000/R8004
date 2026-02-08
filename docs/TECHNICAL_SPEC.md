@@ -361,7 +361,7 @@ Per round or on update: e.g. best competing **trust-weighted** price or list of 
 
 **Offers (market maker → client)**
 
-List of `{ agentId, trustScore, currentPrice, stakeAmount?, taskDeadline?, minPrice? }` sorted by price ascending (or trust then price). Trust scores from the trust API (e.g. TrustApiMock).
+List of `{ agentId, trustScore, currentPrice, stakeAmount?, taskDeadline?, minPrice? }` sorted by price ascending (or trust then price). Trust scores from the trust API (e.g. TrustApiMock). See [Lyneth Labs Whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper); semantic search: [Agent0 search-service](https://github.com/agent0lab/search-service).
 
 **Accept offer (client → market maker)**
 

@@ -2,6 +2,8 @@
 
 Cloudflare Worker that resolves UMA disputes for the AgentTaskEscrow system. Cron-triggered every 5 minutes; fetches escalated disputes, uses Venice AI to decide winner from evidence, and submits resolution via `MockOOv3.pushResolution`.
 
+**References:** [UMA Oracle](https://docs.uma.xyz/protocol-overview/how-does-umas-oracle-work) · [UMA DVM 2.0](https://docs.uma.xyz/protocol-overview/dvm-2.0)
+
 ## Overview
 
 - **Event-based**: Queries `TaskDisputeEscalated` events (efficient, no O(n) RPC calls)
