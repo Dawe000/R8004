@@ -124,17 +124,19 @@ async function loadWorker() {
   return mod.default;
 }
 
-async function createErcTask(worker, env, onchainTaskId) {
+async function createErcTask(worker, env, onchainTaskId, chainId = null) {
+  const erc8001Payload = {
+    taskId: onchainTaskId,
+    stakeAmountWei: '1',
+    publicBaseUrl: BASE_URL,
+    ...(chainId !== null ? { chainId } : {}),
+  };
   const createRes = await worker.fetch(
     req('POST', '/1/tasks?forceAsync=true', {
       task: {
         input: 'example task input',
       },
-      erc8001: {
-        taskId: onchainTaskId,
-        stakeAmountWei: '1',
-        publicBaseUrl: BASE_URL,
-      },
+      erc8001: erc8001Payload,
     }),
     env,
     {}
@@ -205,5 +207,50 @@ describe('exampleagents payment-deposited route', () => {
     const body = await res.json();
     assert.equal(body.status, 'no-op');
     assert.equal(body.taskStatus, 'completed');
+  });
+
+  it('returns 409 when same onchainTaskId exists across chains without chainId', async () => {
+    const worker = await loadWorker();
+    const env = { DB: new FakeD1(), TASK_EXEC_QUEUE: { send: async () => {} } };
+    await createErcTask(worker, env, '555', 9746);
+    await createErcTask(worker, env, '555', 114);
+
+    const res = await worker.fetch(
+      req('POST', '/1/erc8001/payment-deposited', { onchainTaskId: '555' }),
+      env,
+      {}
+    );
+
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.error, 'Ambiguous onchainTaskId across chains');
+    assert.deepEqual(body.candidateChainIds.sort((a, b) => a - b), [114, 9746]);
+  });
+
+  it('routes to the correct task when chainId is provided', async () => {
+    const worker = await loadWorker();
+    const env = { DB: new FakeD1(), TASK_EXEC_QUEUE: { send: async () => {} } };
+    const plasmaTask = await createErcTask(worker, env, '556', 9746);
+    const flareTask = await createErcTask(worker, env, '556', 114);
+
+    const flareRes = await worker.fetch(
+      req('POST', '/1/erc8001/payment-deposited', { onchainTaskId: '556', chainId: 114 }),
+      env,
+      {}
+    );
+    assert.equal(flareRes.status, 200);
+    const flareBody = await flareRes.json();
+    assert.equal(flareBody.taskId, flareTask.id);
+    assert.equal(flareBody.chainId, 114);
+
+    const plasmaRes = await worker.fetch(
+      req('POST', '/1/erc8001/payment-deposited', { onchainTaskId: '556', chainId: 9746 }),
+      env,
+      {}
+    );
+    assert.equal(plasmaRes.status, 200);
+    const plasmaBody = await plasmaRes.json();
+    assert.equal(plasmaBody.taskId, plasmaTask.id);
+    assert.equal(plasmaBody.chainId, 9746);
   });
 });

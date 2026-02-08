@@ -53,6 +53,23 @@ function hasUmaAssertion(task: Task): boolean {
   );
 }
 
+function displayEvidenceValue(value?: string): string {
+  const trimmed = (value || '').trim();
+  return trimmed ? trimmed : 'Not provided';
+}
+
+function displayAssertionId(value?: string): string {
+  const assertionId = String(value || '');
+  if (
+    !assertionId
+    || assertionId === '0x'
+    || assertionId === '0x0000000000000000000000000000000000000000000000000000000000000000'
+  ) {
+    return 'Not escalated yet';
+  }
+  return assertionId;
+}
+
 export function TaskContestationActions({
   task,
   connectedAddress,
@@ -218,6 +235,12 @@ export function TaskContestationActions({
 
       {status === TaskStatus.DisputedAwaitingAgent && (
         <div className="space-y-2">
+          <p className="text-[10px] text-orange-200/80 break-all">
+            Client evidence on-chain: <span className="font-mono text-orange-100">{displayEvidenceValue(task.clientEvidenceURI)}</span>
+          </p>
+          <p className="text-[10px] text-orange-200/80 break-all">
+            UMA assertion: <span className="font-mono text-orange-100">{displayAssertionId(task.umaAssertionId)}</span>
+          </p>
           <button
             onClick={handleSettleConceded}
             disabled={!settleEligibility.enabled || isSettling}
@@ -237,10 +260,10 @@ export function TaskContestationActions({
             Dispute phase: <span className="font-semibold">{disputePhase}</span>
           </p>
           <p className="text-[10px] text-yellow-200 break-all">
-            Agent Evidence URI: <span className="font-mono text-yellow-100">{task.agentEvidenceURI || '-'}</span>
+            Agent Evidence URI: <span className="font-mono text-yellow-100">{displayEvidenceValue(task.agentEvidenceURI)}</span>
           </p>
           <p className="text-[10px] text-yellow-200 break-all">
-            UMA Assertion ID: <span className="font-mono text-yellow-100">{task.umaAssertionId || '-'}</span>
+            UMA Assertion ID: <span className="font-mono text-yellow-100">{displayAssertionId(task.umaAssertionId)}</span>
           </p>
         </div>
       )}

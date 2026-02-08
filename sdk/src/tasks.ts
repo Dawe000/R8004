@@ -5,8 +5,46 @@ import type { Task } from "./types";
 
 /** Plasma RPC and many others limit eth_getLogs to 10,000 blocks per query */
 const LOG_CHUNK_SIZE = 10_000;
+const MIN_LOG_CHUNK_SIZE = 1n;
 
 type EventFilter = Parameters<Contract["queryFilter"]>[0];
+
+function stringifyError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isLogRangeLimitError(error: unknown): boolean {
+  const message = stringifyError(error).toLowerCase();
+  return (
+    message.includes("requested too many blocks") ||
+    message.includes("maximum is set to") ||
+    message.includes("max block range") ||
+    message.includes("query exceeds") ||
+    message.includes("block range")
+  );
+}
+
+function extractMaxRangeFromError(error: unknown): bigint | null {
+  const message = stringifyError(error);
+  const match = message.match(/maximum\s+is\s+set\s+to\s+(\d+)/i);
+  if (!match) return null;
+  try {
+    const parsed = BigInt(match[1]);
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Query filter in 10k-block chunks to respect RPC limits (e.g. Plasma 10k). Returns events from fromBlock to latest. */
 async function queryFilterChunked(
@@ -21,12 +59,31 @@ async function queryFilterChunked(
 
   const all: Awaited<ReturnType<Contract["queryFilter"]>> = [];
   let start = fromBlock;
+  let chunkSize = BigInt(LOG_CHUNK_SIZE);
   while (start <= toBlock) {
-    const end = start + BigInt(LOG_CHUNK_SIZE) - 1n;
+    const end = start + chunkSize - 1n;
     const chunkEnd = end > toBlock ? toBlock : end;
-    const events = await escrow.queryFilter(filter, start, chunkEnd);
-    all.push(...events);
-    start = chunkEnd + 1n;
+    try {
+      const events = await escrow.queryFilter(filter, start, chunkEnd);
+      all.push(...events);
+      start = chunkEnd + 1n;
+    } catch (error) {
+      if (!isLogRangeLimitError(error)) {
+        throw error;
+      }
+
+      const maxRange = extractMaxRangeFromError(error);
+      let nextChunkSize = maxRange ?? chunkSize / 2n;
+      if (nextChunkSize >= chunkSize) {
+        nextChunkSize = chunkSize - 1n;
+      }
+
+      if (nextChunkSize < MIN_LOG_CHUNK_SIZE || chunkSize <= MIN_LOG_CHUNK_SIZE) {
+        throw error;
+      }
+
+      chunkSize = nextChunkSize;
+    }
   }
   return all;
 }

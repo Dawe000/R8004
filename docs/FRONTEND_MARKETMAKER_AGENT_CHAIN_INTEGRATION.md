@@ -16,10 +16,10 @@ This integration uses direct frontend-to-agent execution handoff while keeping m
 1. Frontend builds canonical task spec JSON (`erc8001-task/v1`).
 2. Frontend pins task spec to IPFS via `POST /api/ipfs/task` (server route).
 3. Frontend calls `createTask(descriptionURI, ...)` using the IPFS URI.
-4. Frontend dispatches selected agent directly (`POST /{agentId}/tasks?forceAsync=true`) with ERC8001 metadata.
+4. Frontend dispatches selected agent directly (`POST /{agentId}/tasks?forceAsync=true`) with ERC8001 metadata including `chainId`.
 5. Agent accepts on-chain with stake.
 6. Client deposits payment on-chain from frontend.
-7. Frontend notifies agent directly (`POST /{agentId}/erc8001/payment-deposited`).
+7. Frontend notifies agent directly (`POST /{agentId}/erc8001/payment-deposited`) with `onchainTaskId` + `chainId`.
 8. Agent verifies `paymentDeposited(taskId)` and resolves task input from on-chain `descriptionURI` (IPFS fetch).
 9. Agent executes, stores result in D1, then calls `assertCompletion(..., resultURI)`.
 10. Frontend polls chain and fetches result from on-chain `resultURI`.
@@ -76,8 +76,10 @@ Additions:
 Changes:
 
 - Frontend no longer uses marketmaker dispatch/notify execution routes.
+- Direct execution now supports both Plasma Testnet (`9746`) and Flare Coston2 (`114`).
 - Home + Activity payment-notify flows call agent worker directly.
 - Marketmaker client API now handles matching only.
+- Task dispatch metadata is chain-scoped (`chainId:taskId`) to avoid cross-chain ID collisions.
 
 ### Exampleagents worker
 
@@ -111,7 +113,11 @@ Changes:
   - `erc8001.escalation.evidenceUri`
   - `erc8001.escalation.escalatedAt`
 - Added optional env/config:
-  - `ERC8001_DEPLOYMENT_BLOCK`
+  - `ERC8001_CHAIN_IDS` (optional; defaults to both `9746,114`)
+  - chain-scoped network overrides:
+    - `ERC8001_RPC_URL_9746`, `ERC8001_ESCROW_ADDRESS_9746`, `ERC8001_DEPLOYMENT_BLOCK_9746`, `ERC8001_PUBLIC_BASE_URL_9746`
+    - `ERC8001_RPC_URL_114`, `ERC8001_ESCROW_ADDRESS_114`, `ERC8001_DEPLOYMENT_BLOCK_114`, `ERC8001_PUBLIC_BASE_URL_114`
+  - legacy unsuffixed fallback vars remain supported (`ERC8001_RPC_URL`, `ERC8001_ESCROW_ADDRESS`, `ERC8001_DEPLOYMENT_BLOCK`, `ERC8001_PUBLIC_BASE_URL`)
   - `PINATA_JWT` or `NFT_STORAGE_API_KEY` (for escalation evidence uploads)
   - `IPFS_PROVIDER=mock` (local testing)
   - `IPFS_URI_SCHEME`

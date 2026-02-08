@@ -22,7 +22,7 @@ import {
   notifyErc8001PaymentDepositedDirect,
 } from '@/lib/api/agents';
 import { getTaskDispatchMeta, upsertTaskDispatchMeta } from '@/lib/taskMeta';
-import { formatEther, parseEther } from 'ethers';
+import { formatUnits, parseUnits } from 'ethers';
 import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { TaskStatus, type Task } from '@sdk/types';
 import {
@@ -51,6 +51,21 @@ const TERMINAL_STATUSES = new Set<number>([
   TaskStatus.Resolved,
 ]);
 
+const SUPPORTED_DIRECT_EXECUTION_CHAINS = new Set<number>([
+  PLASMA_TESTNET_DEFAULTS.chainId,
+  COSTON2_FIRELIGHT_DEFAULTS.chainId,
+]);
+
+const MARKETMAKER_STAKE_DECIMALS = 18;
+
+function scaleAmount(rawAmount: bigint, fromDecimals: number, toDecimals: number): bigint {
+  if (fromDecimals === toDecimals) return rawAmount;
+  if (fromDecimals > toDecimals) {
+    return rawAmount / (10n ** BigInt(fromDecimals - toDecimals));
+  }
+  return rawAmount * (10n ** BigInt(toDecimals - fromDecimals));
+}
+
 export default function Home() {
   const { address } = useAccount();
   const chainId = useChainId();
@@ -74,20 +89,18 @@ export default function Home() {
   const sdk = useAgentSDK();
   const { agentResponseWindowSec, disputeBondBps, isLoading: escrowTimingLoading } = useEscrowTiming();
   const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
+  const isCoston2Chain = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId;
+  const isSupportedExecutionChain = SUPPORTED_DIRECT_EXECUTION_CHAINS.has(chainId);
   const paymentTokenAddress = isPlasmaChain
     ? PLASMA_TESTNET_DEFAULTS.mockTokenAddress
-    : COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress;
+    : isCoston2Chain
+      ? COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress
+      : PLASMA_TESTNET_DEFAULTS.mockTokenAddress;
 
   const selectedAgent = useMemo(() => {
     if (!selectedAgentId || !agents) return null;
     return agents.find((agent) => agent.agent.agentId === selectedAgentId) || null;
   }, [agents, selectedAgentId]);
-
-  useEffect(() => {
-    if (!selectedAgent?.agent.sla?.minAcceptanceStake) return;
-    const minStake = formatEther(selectedAgent.agent.sla.minAcceptanceStake);
-    setPaymentAmount(minStake);
-  }, [selectedAgent]);
 
   const { data: balance } = useReadContract({
     address: paymentTokenAddress as `0x${string}`,
@@ -124,8 +137,43 @@ export default function Home() {
     },
   });
 
+  const { data: paymentTokenDecimalsData } = useReadContract({
+    address: paymentTokenAddress as `0x${string}`,
+    abi: [
+      {
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }],
+      },
+    ],
+    functionName: 'decimals',
+    query: {
+      enabled: !!address,
+    },
+  });
+
+  const paymentTokenDecimals =
+    typeof paymentTokenDecimalsData === 'number'
+      ? paymentTokenDecimalsData
+      : isCoston2Chain
+        ? 6
+        : 18;
+
   const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined)
-    || (isPlasmaChain ? 'TST' : 'FXRP');
+    || (isPlasmaChain ? 'TST' : isCoston2Chain ? 'FXRP' : 'TOKEN');
+
+  useEffect(() => {
+    if (!selectedAgent?.agent.sla?.minAcceptanceStake) return;
+    const rawStake = BigInt(selectedAgent.agent.sla.minAcceptanceStake);
+    const tokenStake = scaleAmount(
+      rawStake,
+      MARKETMAKER_STAKE_DECIMALS,
+      paymentTokenDecimals
+    );
+    setPaymentAmount(formatUnits(tokenStake, paymentTokenDecimals));
+  }, [paymentTokenDecimals, selectedAgent]);
 
   const refreshActiveTask = useCallback(async () => {
     if (!sdk || activeTaskId === null) return;
@@ -197,9 +245,9 @@ export default function Home() {
     const toastId = toast.loading('Creating task intent on-chain...');
 
     try {
-      if (!isPlasmaChain) {
+      if (!isSupportedExecutionChain) {
         throw new Error(
-          `Direct agent execution currently supports Plasma only. Switch wallet network to Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}).`
+          `Direct agent execution supports Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}) and Flare Coston2 (${COSTON2_FIRELIGHT_DEFAULTS.chainId}).`
         );
       }
 
@@ -207,7 +255,12 @@ export default function Home() {
         throw new Error('Selected agent is missing minAcceptanceStake');
       }
 
-      const amount = parseEther(paymentAmount);
+      const amount = parseUnits(paymentAmount, paymentTokenDecimals);
+      const stakeAmount = scaleAmount(
+        BigInt(selectedAgent.agent.sla.minAcceptanceStake),
+        MARKETMAKER_STAKE_DECIMALS,
+        paymentTokenDecimals
+      );
 
       const taskSpecUri = await createTaskSpecUri({
         version: ONCHAIN_TASK_SPEC_V1,
@@ -228,8 +281,9 @@ export default function Home() {
 
       const dispatchResult = await dispatchErc8001TaskDirect({
         agentId: selectedAgent.agent.agentId,
+        chainId,
         onchainTaskId: taskId.toString(),
-        stakeAmountWei: selectedAgent.agent.sla.minAcceptanceStake,
+        stakeAmountWei: stakeAmount.toString(),
         skill: selectedAgent.agent.skills?.[0]?.id,
       });
 
@@ -244,7 +298,7 @@ export default function Home() {
       if (typeof window !== 'undefined') {
         const savedTasks = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
         localStorage.setItem('r8004_tasks', JSON.stringify([...savedTasks, taskId.toString()]));
-        upsertTaskDispatchMeta(taskId.toString(), {
+        upsertTaskDispatchMeta(chainId, taskId.toString(), {
           agentId: dispatchResult.agentId,
           runId: dispatchResult.runId,
         });
@@ -264,7 +318,12 @@ export default function Home() {
 
   const handleNotifyPaymentDeposited = useCallback(
     async (taskId: bigint) => {
-      const dispatchMeta = getTaskDispatchMeta(taskId.toString());
+      if (!isSupportedExecutionChain) {
+        toast.warning('Agent payment notification is only available on supported execution chains.');
+        return;
+      }
+
+      const dispatchMeta = getTaskDispatchMeta(chainId, taskId.toString());
       if (!dispatchMeta?.agentId) {
         toast.warning('Payment deposited, but agent notification metadata is missing for this task.');
         return;
@@ -275,6 +334,7 @@ export default function Home() {
       try {
         await notifyErc8001PaymentDepositedDirect({
           agentId: dispatchMeta.agentId,
+          chainId,
           onchainTaskId: taskId.toString(),
         });
         toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
@@ -285,7 +345,7 @@ export default function Home() {
         setIsNotifyingPayment(false);
       }
     },
-    []
+    [chainId, isSupportedExecutionChain]
   );
 
   const handleDepositPayment = async () => {
@@ -415,7 +475,9 @@ export default function Home() {
                   {selectedAgentId ? (
                     <>
                       <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
-                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} {paymentTokenSymbol}</span>
+                      <span>
+                        Balance: {balance ? parseFloat(formatUnits(balance as bigint, paymentTokenDecimals)).toFixed(4) : '0.00'} {paymentTokenSymbol}
+                      </span>
                     </>
                   ) : (
                     <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>

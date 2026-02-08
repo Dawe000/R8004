@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
-import { formatEther } from 'ethers';
-import { useAccount, useReadContract } from 'wagmi';
+import { formatUnits } from 'ethers';
+import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
@@ -10,6 +10,7 @@ import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
 import { getDisputeStatusMessage, isTaskTerminal } from '@/lib/disputeFlow';
 import { classifyRpcError } from '@/lib/rpcErrors';
 import { getTaskDispatchMeta } from '@/lib/taskMeta';
+import { COSTON2_FIRELIGHT_DEFAULTS, PLASMA_TESTNET_DEFAULTS } from '@sdk/index';
 import {
   Dialog,
   DialogContent,
@@ -58,9 +59,37 @@ function DataRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function displayEvidenceValue(value?: string): string {
+  const trimmed = (value || '').trim();
+  return trimmed ? trimmed : 'Not provided';
+}
+
+function displayAssertionId(value?: string): string {
+  const assertionId = String(value || '');
+  if (
+    !assertionId
+    || assertionId === '0x'
+    || assertionId === '0x0000000000000000000000000000000000000000000000000000000000000000'
+  ) {
+    return 'Not escalated yet';
+  }
+  return assertionId;
+}
+
+function getAddressExplorerUrl(address: string, chainId: number): string | null {
+  if (chainId === PLASMA_TESTNET_DEFAULTS.chainId) {
+    return `https://testnet.plasmascan.to/address/${address}`;
+  }
+  if (chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId) {
+    return `https://coston2-explorer.flare.network/address/${address}`;
+  }
+  return null;
+}
+
 export function TaskActivity({ taskId }: { taskId: string }) {
   const sdk = useAgentSDK();
   const { address } = useAccount();
+  const chainId = useChainId();
   const {
     agentResponseWindowSec,
     disputeBondBps,
@@ -92,6 +121,23 @@ export function TaskActivity({ taskId }: { taskId: string }) {
       },
     ],
     functionName: 'symbol',
+    query: {
+      enabled: Boolean(task?.paymentToken),
+    },
+  });
+
+  const { data: paymentTokenDecimalsData } = useReadContract({
+    address: task?.paymentToken as `0x${string}` | undefined,
+    abi: [
+      {
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }],
+      },
+    ],
+    functionName: 'decimals',
     query: {
       enabled: Boolean(task?.paymentToken),
     },
@@ -245,6 +291,13 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     agentResponseWindowSec ?? 0n
   );
   const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
+  const paymentTokenDecimals =
+    typeof paymentTokenDecimalsData === 'number'
+      ? paymentTokenDecimalsData
+      : chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId
+        ? 6
+        : 18;
+  const explorerUrl = getAddressExplorerUrl(task.client, chainId);
   const StatusIcon = statusInfo.icon;
   const normalizedAddress = address?.toLowerCase();
   const isTaskClient = Boolean(normalizedAddress && normalizedAddress === task.client.toLowerCase());
@@ -273,7 +326,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
         : 'Deposit payment before notifying the agent.';
 
   const handleNotifyPaymentDeposited = async () => {
-    const dispatchMeta = getTaskDispatchMeta(task.id.toString());
+    const dispatchMeta = getTaskDispatchMeta(chainId, task.id.toString());
     if (!dispatchMeta?.agentId) {
       toast.warning('Payment deposited, but agent notification unavailable for this historical task.');
       return;
@@ -284,6 +337,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     try {
       await notifyErc8001PaymentDepositedDirect({
         agentId: dispatchMeta.agentId,
+        chainId,
         onchainTaskId: task.id.toString(),
       });
       toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
@@ -336,7 +390,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
       <div className="flex items-center gap-2">
         <div className="text-right">
-          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} {paymentTokenSymbol}</div>
+          <div className="text-[10px] font-black text-white">{formatUnits(task.paymentAmount, paymentTokenDecimals)} {paymentTokenSymbol}</div>
         </div>
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -359,14 +413,14 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               <DataRow label="Client" value={task.client} />
               <DataRow label="Agent" value={task.agent} />
               <DataRow label="Payment Token" value={task.paymentToken} />
-              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} ${paymentTokenSymbol}`} />
-              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} ${paymentTokenSymbol}`} />
+              <DataRow label="Payment Amount" value={`${formatUnits(task.paymentAmount, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Stake" value={`${formatUnits(task.agentStake, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
               <DataRow label="Payment Deposited" value={paymentDeposited === null ? '-' : paymentDeposited ? 'Yes' : 'No'} />
               <DataRow label="Created At" value={formatTimestamp(task.createdAt)} />
               <DataRow label="Deadline" value={formatTimestamp(task.deadline)} />
               <DataRow label="Cooldown Ends" value={formatTimestamp(task.cooldownEndsAt)} />
-              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} ${paymentTokenSymbol}`} />
-              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} ${paymentTokenSymbol}`} />
+              <DataRow label="Client Dispute Bond" value={`${formatUnits(task.clientDisputeBond, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Escalation Bond" value={`${formatUnits(task.agentEscalationBond, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
               <DataRow label="Result Hash" value={task.resultHash} />
               <DataRow label="Result URI" value={task.resultURI || '-'} />
             </div>
@@ -398,9 +452,9 @@ export function TaskActivity({ taskId }: { taskId: string }) {
             <div className="space-y-2 rounded-xl border border-orange-400/20 bg-orange-950/10 p-3">
               <p className="text-[11px] font-bold uppercase tracking-wider text-orange-300">Dispute Lifecycle</p>
               <p className="text-[10px] text-orange-200/80">{disputeStatusMessage}</p>
-              <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
-              <DataRow label="Agent Evidence URI" value={task.agentEvidenceURI || '-'} />
-              <DataRow label="UMA Assertion ID" value={task.umaAssertionId || '-'} />
+              <DataRow label="Client Evidence URI" value={displayEvidenceValue(task.clientEvidenceURI)} />
+              <DataRow label="Agent Evidence URI" value={displayEvidenceValue(task.agentEvidenceURI)} />
+              <DataRow label="UMA Assertion ID" value={displayAssertionId(task.umaAssertionId)} />
               <DataRow label="UMA Result Truth" value={task.umaResultTruth ? 'true' : 'false'} />
             </div>
 
@@ -440,14 +494,16 @@ export function TaskActivity({ taskId }: { taskId: string }) {
           </DialogContent>
         </Dialog>
 
-        <a
-          href={`https://testnet.plasmascan.to/address/${task.client}`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <ExternalLink className="h-3 w-3" />
-        </a>
+        {explorerUrl && (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
       </div>
     </div>
   );

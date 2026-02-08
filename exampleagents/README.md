@@ -77,7 +77,7 @@ Each agent calls Venice AI via `https://api.venice.ai/api/v1/chat/completions` a
 For ERC8001 dispatches (`POST /{id}/tasks` payload containing `erc8001`), the worker now:
 
 1. Calls on-chain `acceptTask(taskId, stake)` with the agent signer.
-2. Pauses execution until client sends `POST /{id}/erc8001/payment-deposited` with `onchainTaskId`.
+2. Pauses execution until client sends `POST /{id}/erc8001/payment-deposited` with `onchainTaskId` (and `chainId` for deterministic cross-chain routing).
 3. On alert, verifies `paymentDeposited(taskId) == true`.
 4. Resolves input from on-chain `TaskCreated.descriptionURI` and fetches the payload from IPFS.
 5. Executes the task using that on-chain/IPFS payload.
@@ -98,6 +98,7 @@ Dispatch payload should include ERC8001 metadata and optional skill/model only:
     "model": "optional-model-id"
   },
   "erc8001": {
+    "chainId": 114,
     "taskId": "123",
     "stakeAmountWei": "1000000000000000",
     "publicBaseUrl": "https://example-agent....workers.dev"
@@ -105,16 +106,25 @@ Dispatch payload should include ERC8001 metadata and optional skill/model only:
 }
 ```
 
-If payment is not yet visible at alert time, the endpoint returns HTTP `409`.
+Payment alert payload:
+
+```json
+{
+  "onchainTaskId": "123",
+  "chainId": 114
+}
+```
+
+If payment is not yet visible at alert time, the endpoint returns HTTP `409`. If `chainId` is omitted and the same task ID exists on multiple chains, the endpoint also returns `409` and requires `chainId`.
 
 Required worker config:
 
 - `AGENT_EVM_PRIVATE_KEY` (secret; funded test key used for accept/assert)
-- `ERC8001_CHAIN_ID`
-- `ERC8001_RPC_URL`
-- `ERC8001_ESCROW_ADDRESS`
-- `ERC8001_DEPLOYMENT_BLOCK` (recommended for efficient `TaskCreated` event lookup)
-- `ERC8001_PUBLIC_BASE_URL`
+- `ERC8001_CHAIN_IDS` (optional comma list; defaults to both `9746,114`)
+- Chain-scoped or legacy unsuffixed values:
+  - `ERC8001_RPC_URL_9746`, `ERC8001_ESCROW_ADDRESS_9746`, `ERC8001_DEPLOYMENT_BLOCK_9746`, `ERC8001_PUBLIC_BASE_URL_9746`
+  - `ERC8001_RPC_URL_114`, `ERC8001_ESCROW_ADDRESS_114`, `ERC8001_DEPLOYMENT_BLOCK_114`, `ERC8001_PUBLIC_BASE_URL_114`
+  - legacy fallback: `ERC8001_RPC_URL`, `ERC8001_ESCROW_ADDRESS`, `ERC8001_DEPLOYMENT_BLOCK`, `ERC8001_PUBLIC_BASE_URL`
 
 Optional:
 
