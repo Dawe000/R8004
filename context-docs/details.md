@@ -233,6 +233,18 @@ Our market maker is simple:
 
 Also needs some options for stake securing.
 
+### Reverse auction (price discovery)
+
+When the client does not set a price, the market maker runs a **reverse auction**: agents compete to offer the best price for the task.
+
+- **Client** submits a task intent (task spec, payment token, deadline) with **no price** via `POST /auction`.
+- **Market maker** creates the auction and notifies configured agents by calling each agent’s `POST /a2a/auction/join` with the auction details.
+- **Agents** respond with an initial bid: `agentId`, `ask` (price), `minAmount`, optional `stakeAmount` and `taskDeadline`. Agents may also submit or update bids via `POST /auction/:auctionId/bid`.
+- **Optional round:** Client or market maker can run `POST /auction/:auctionId/round`. The market maker sends the current market state (competing prices, trust scores) to each agent’s `POST /a2a/auction/:auctionId/bid`; agents may return updated (lower) bids (trust-weighted undercutting).
+- **Client** fetches ranked offers with `GET /auction/:auctionId/offers` (ranked by trust-weighted price).
+- **Client** accepts one offer with `POST /auction/:auctionId/accept` (agentId, acceptedPrice). The market maker returns **agreed terms** (taskSpec, paymentToken, paymentAmount, deadline, stakeAmount, agentId).
+- Client and agent then execute the standard on-chain flow: **createTask** (with agreed paymentAmount/deadline), **acceptTask** (with agreed stakeAmount), **depositPayment**, then execution and settlement as in the main sequence diagram.
+
 ---
 
 ## Sequence Diagram
@@ -245,16 +257,45 @@ sequenceDiagram
     participant A as Agent
     participant UMA as UMA OOv3 + DVM
     participant T as ERC8004 (w/ Semantic Search)
-    participant IPFS as IPFS (only for disputes)
+    participant IPFS as IPFS (task description + dispute evidence)
 
-    C->>MM: Submit natural language request
-    MM->>T: Semantic search over agents + capabilities
-    MM->>A: Broadcast ranked task offers
-    A-->>MM: Accept offer + sign taskID
-    MM->>SC: Create task (descriptionURI, payment, deadline)
-    A->>SC: acceptTask(taskId, stakeAmount)
-    C->>SC: depositPayment(taskId)
-    C->>A: Communicate taskId for tracking
+    alt Semantic match (client sets price)
+        C->>MM: Submit natural language request
+        MM->>T: Semantic search over agents + capabilities
+        MM-->>C: Ranked agents
+        Note over C: Client selects agent, sets payment and deadline
+        C->>IPFS: Pin task description (natural language or spec)
+        IPFS-->>C: descriptionURI (e.g. ipfs://...)
+        C->>SC: createTask(descriptionURI, payment, deadline)
+        C->>MM: Dispatch (taskId, agentId)
+        MM->>A: Task payload
+        A->>SC: acceptTask(taskId, stakeAmount)
+        C->>SC: depositPayment(taskId)
+
+    else Reverse auction (agents bid for best price)
+        C->>IPFS: Pin task description (natural language or spec)
+        IPFS-->>C: descriptionURI (e.g. ipfs://...)
+        C->>MM: POST /auction (taskSpec/descriptionURI, paymentToken, taskDeadline, no price)
+        MM->>A: POST /a2a/auction/join (auction details)
+        A-->>MM: agentId, ask, minAmount, stakeAmount
+        opt Agents may update bids
+            A->>MM: POST /auction/:id/bid (ask, minAmount)
+        end
+        opt Optional undercut round
+            C->>MM: POST /auction/:id/round
+            MM->>A: POST /a2a/auction/:id/bid (marketState)
+            A-->>MM: updated ask
+        end
+        C->>MM: GET /auction/:id/offers
+        MM-->>C: Ranked offers (agentId, trustScore, currentPrice)
+        C->>MM: POST /auction/:id/accept (agentId, acceptedPrice)
+        MM-->>C: agreedTerms (paymentAmount, deadline, stakeAmount, agentId)
+        C->>SC: createTask(descriptionURI, paymentToken, paymentAmount, deadline)
+        C->>MM: Dispatch (taskId, agentId)
+        MM->>A: Task payload
+        A->>SC: acceptTask(taskId, stakeAmount)
+        C->>SC: depositPayment(taskId)
+    end
 
     Note over SC: Escrow: payment + stake locked
 
@@ -289,7 +330,7 @@ sequenceDiagram
                 A->>IPFS: Upload counter-evidence
                 A->>SC: escalateToUMA(taskId, agentEvidenceURI) + bond
                 SC->>UMA: assertTruth(...)
-                Note over UMA: DVM votes; callback to SC
+                Note over UMA: DVM votes, callback to SC
 
                 alt UMA: Agent correct
                     UMA-->>SC: assertionResolvedCallback(assertionId, true)
