@@ -68,7 +68,7 @@ export default function FAssetsFlowPage() {
             <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">Activity</button>
           </Link>
           <Link href="/plasma">
-            <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">Plasma Flow</button>
+            <button className="px-4 py-1.5 rounded-full hover:bg-[#162f29]/20 text-muted-foreground hover:text-[#4ade80] font-bold text-xs transition-all">Plasma Flow</button>
           </Link>
           <button className="px-4 py-1.5 rounded-full bg-[#fbcfe8] text-[#be185d] font-bold text-xs transition-all shadow-lg shadow-pink-500/20">FAssets Flow</button>
         </div>

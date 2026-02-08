@@ -34,7 +34,7 @@ export default function PlasmaFlowPage() {
           <Link href="/fassets">
             <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">FAssets Flow</button>
           </Link>
-          <button className="px-4 py-1.5 rounded-full bg-primary text-white font-bold text-xs transition-all shadow-lg shadow-primary/20">Plasma Flow</button>
+          <button className="px-4 py-1.5 rounded-full bg-[#162f29] text-[#4ade80] font-bold text-xs transition-all shadow-lg shadow-green-900/20">Plasma Flow</button>
         </div>
         <ConnectButton />
       </nav>
@@ -44,7 +44,7 @@ export default function PlasmaFlowPage() {
         <div className="w-full max-w-4xl">
           <Card className="p-8 bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem]">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-primary/20 rounded-2xl text-primary">
+              <div className="p-3 bg-[#162f29] rounded-2xl text-[#4ade80]">
                 <Zap className="w-6 h-6 fill-current" />
               </div>
               <h2 className="text-xl font-bold text-white tracking-tight">Plasma USDT0 Model</h2>

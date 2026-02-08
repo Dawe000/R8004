@@ -44,7 +44,7 @@ export default function ActivityPage() {
           </Link>
           <button className="px-4 py-1.5 rounded-full bg-white/10 text-white font-medium text-xs transition-all">Activity</button>
           <Link href="/plasma">
-            <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">Plasma Flow</button>
+            <button className="px-4 py-1.5 rounded-full hover:bg-[#162f29]/20 text-muted-foreground hover:text-[#4ade80] font-bold text-xs transition-all">Plasma Flow</button>
           </Link>
           <Link href="/fassets">
             <button className="px-4 py-1.5 rounded-full hover:bg-[#fbcfe8]/10 text-muted-foreground hover:text-[#fbcfe8] font-bold text-xs transition-all">FAssets Flow</button>

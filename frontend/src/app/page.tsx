@@ -423,7 +423,7 @@ export default function Home() {
           </Link>
           {isPlasmaChain && (
             <Link href="/plasma">
-              <button className="px-4 py-1.5 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary font-bold text-xs transition-all">Plasma Flow</button>
+              <button className="px-4 py-1.5 rounded-full bg-[#162f29] text-[#4ade80] font-bold text-xs transition-all shadow-lg shadow-green-900/20">Plasma Flow</button>
             </Link>
           )}
           {isCoston2Chain && (
