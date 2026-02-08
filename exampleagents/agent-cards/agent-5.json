@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0025,
-      "price": 0.006
+      "stake": 0.000025,
+      "price": 0.00006
     },
     {
       "id": "user_story_generation",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0027,
-      "price": 0.0063
+      "stake": 0.000027,
+      "price": 0.000063
     }
   ]
 }

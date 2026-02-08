@@ -17,9 +17,10 @@ import {
   ClientSDK,
   AgentSDK,
   getPlasmaTestnetConfig,
+  getEscrowConfig,
 } from "@erc8001/agent-task-sdk";
 import * as fs from "fs";
-import { TESTNET_CONFIG } from "../config/testnet";
+import { TESTNET_CONFIG } from "../../config/testnet";
 
 const COOLDOWN_SECONDS = TESTNET_CONFIG.COOLDOWN_PERIOD;
 const AGENT_RESPONSE_WINDOW_SECONDS = TESTNET_CONFIG.AGENT_RESPONSE_WINDOW;
@@ -27,6 +28,11 @@ const AGENT_RESPONSE_WINDOW_SECONDS = TESTNET_CONFIG.AGENT_RESPONSE_WINDOW;
 const PATH_B_CONCEDE_WAIT_SECONDS =
   TESTNET_CONFIG.COOLDOWN_PERIOD + TESTNET_CONFIG.AGENT_RESPONSE_WINDOW;
 const UMA_LIVENESS_SECONDS = TESTNET_CONFIG.UMA_LIVENESS;
+
+/** Tiny amounts for testnet flows (below a cent). USDT0 on Plasma has 6 decimals. */
+const USDT0_DECIMALS = 6;
+const PAYMENT_AMOUNT = ethers.parseUnits("0.001", USDT0_DECIMALS);   // 0.001 USDT
+const STAKE_AMOUNT = ethers.parseUnits("0.0001", USDT0_DECIMALS);    // 0.0001 USDT
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,15 +100,19 @@ async function main() {
   const clientSdk = new ClientSDK(config, client);
   const agentSdk = new AgentSDK(config, agent);
 
-  const paymentAmount = ethers.parseEther("100");
-  const stakeAmount = ethers.parseEther("10");
+  const paymentAmount = PAYMENT_AMOUNT;
+  const stakeAmount = STAKE_AMOUNT;
   const token = new ethers.Contract(
     tokenAddr,
-    ["function balanceOf(address) view returns (uint256)"],
+    [
+      "function balanceOf(address) view returns (uint256)",
+      "function transfer(address to, uint256 amount) returns (bool)",
+    ],
     provider
   );
 
   console.log(pathArg.toUpperCase(), "on Plasma testnet");
+  console.log("  Escrow:", config.escrowAddress);
   console.log("  Client:", await client.getAddress());
   console.log("  Agent:", await agent.getAddress());
   console.log("");
@@ -132,7 +142,7 @@ async function main() {
     console.log("6. Agent settles (no contest)...");
     await agentSdk.settleNoContest(taskId);
     const delta = (await token.balanceOf(agent.address)) - balanceBefore;
-    console.log("Path A complete. Agent received:", ethers.formatEther(delta), "TST");
+    console.log("Path A complete. Agent received:", ethers.formatUnits(delta, USDT0_DECIMALS), "USDT0");
     if (delta !== paymentAmount + stakeAmount) throw new Error(`Expected ${paymentAmount + stakeAmount}, got ${delta}`);
   } else if (pathArg === "path-b-concede") {
     const deadline = Math.floor(Date.now() / 1000) + 86400;
@@ -166,7 +176,7 @@ async function main() {
     console.log("7. Client settles (agent conceded)...");
     await clientSdk.settleAgentConceded(taskId);
     const delta = (await token.balanceOf(client.address)) - balanceBefore;
-    console.log("Path B (concede) complete. Client received:", ethers.formatEther(delta), "TST");
+    console.log("Path B (concede) complete. Client received:", ethers.formatUnits(delta, USDT0_DECIMALS), "USDT0");
     if (delta !== paymentAmount + disputeBond + stakeAmount) {
       throw new Error(`Expected ${paymentAmount + disputeBond + stakeAmount}, got ${delta}`);
     }
@@ -195,6 +205,31 @@ async function main() {
     console.log("5. Client disputes (uploading evidence to IPFS)...");
     await clientSdk.disputeTask(taskId, { reason: "Client disputes: task was not completed correctly" });
     console.log("   Done");
+
+    // Escalation bond = max(1% of payment, umaConfig.minimumBond). With 6-decimal USDT0, minimumBond=1e18 => 1e12 USDT (impossible). Fund agent if bond is achievable.
+    const taskForBond = await clientSdk.getTask(taskId);
+    const escrowCfg = await getEscrowConfig(config.escrowAddress!, provider);
+    const computedBond = (taskForBond.paymentAmount * escrowCfg.escalationBondBps) / 10000n;
+    const requiredBond =
+      computedBond > escrowCfg.umaConfig.minimumBond
+        ? computedBond
+        : escrowCfg.umaConfig.minimumBond;
+    if (requiredBond >= 10n ** 15n) {
+      throw new Error(
+        `Escalation bond is ${requiredBond} raw (minimumBond=${escrowCfg.umaConfig.minimumBond}). ` +
+          `For 6-decimal USDT0 this is too large. Set UMA_MINIMUM_BOND to 1e6 in contracts/config/testnet.ts and redeploy escrow.`
+      );
+    }
+    const agentBalance = await token.balanceOf(agent.address);
+    if (agentBalance < requiredBond) {
+      const shortfall = requiredBond - agentBalance;
+      console.log(
+        `   Funding agent with ${ethers.formatUnits(shortfall, USDT0_DECIMALS)} USDT0 for escalation bond...`
+      );
+      const tokenWithClient = token.connect(client) as ethers.Contract;
+      const tx = await tokenWithClient.transfer(agent.address, shortfall);
+      await tx.wait();
+    }
 
     console.log("6. Agent escalates to UMA (uploading evidence to IPFS)...");
     await agentSdk.escalateToUMA(taskId, { reason: "Agent claims task was completed as specified" });
@@ -256,7 +291,7 @@ async function main() {
     console.log("4. Client timeout cancellation...");
     await clientSdk.timeoutCancellation(taskId, "deadline exceeded");
     const delta = (await token.balanceOf(client.address)) - balanceBefore;
-    console.log("Path C complete. Client received:", ethers.formatEther(delta), "TST");
+    console.log("Path C complete. Client received:", ethers.formatUnits(delta, USDT0_DECIMALS), "USDT0");
     if (delta !== paymentAmount + stakeAmount) throw new Error(`Expected ${paymentAmount + stakeAmount}, got ${delta}`);
   } else if (pathArg === "path-d") {
     const deadline = Math.floor(Date.now() / 1000) + 86400;
@@ -278,7 +313,7 @@ async function main() {
     await agentSdk.cannotComplete(taskId, "resource unavailable");
     const clientDelta = (await token.balanceOf(client.address)) - clientBefore;
     const agentDelta = (await token.balanceOf(agent.address)) - agentBefore;
-    console.log("Path D complete. Client +", ethers.formatEther(clientDelta), "TST, Agent +", ethers.formatEther(agentDelta), "TST");
+    console.log("Path D complete. Client +", ethers.formatUnits(clientDelta, USDT0_DECIMALS), "USDT0, Agent +", ethers.formatUnits(agentDelta, USDT0_DECIMALS), "USDT0");
     if (clientDelta !== paymentAmount || agentDelta !== stakeAmount) throw new Error(`Expected client=${paymentAmount}, agent=${stakeAmount}`);
   }
 }

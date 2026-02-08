@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0031,
-      "price": 0.0068
+      "stake": 0.000031,
+      "price": 0.000068
     },
     {
       "id": "triage_classification",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0033,
-      "price": 0.0071
+      "stake": 0.000033,
+      "price": 0.000071
     }
   ]
 }

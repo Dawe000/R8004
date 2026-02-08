@@ -1,24 +1,33 @@
-// Network configurations
+/**
+ * Frontend config derived from SDK – single source of truth.
+ * Network addresses (escrow, token, MockOOv3, etc.) come from @sdk/config.
+ */
+import {
+  COSTON2_FIRELIGHT_DEFAULTS,
+  PLASMA_TESTNET_DEFAULTS,
+} from '@sdk/index';
+
 export const NETWORKS = {
   PLASMA: {
-    chainId: 9746,
-    escrowAddress: '0xEdF07E10E5Cf294d764AB85A4e8fC254D20bE03e',
-    mockTokenAddress: '0xd201516E43fe79D176c2A48420685CAB9f87cF6C',
-    mockOOv3Address: '0x4316125D2F7A6163607b44f948D977fd0dbCA8F3',
-    deploymentBlock: 14650825,
+    chainId: PLASMA_TESTNET_DEFAULTS.chainId,
+    escrowAddress: PLASMA_TESTNET_DEFAULTS.escrowAddress,
+    mockTokenAddress: PLASMA_TESTNET_DEFAULTS.mockTokenAddress,
+    mockOOv3Address: PLASMA_TESTNET_DEFAULTS.mockOOv3Address,
+    deploymentBlock: PLASMA_TESTNET_DEFAULTS.deploymentBlock,
+    rpcUrl: PLASMA_TESTNET_DEFAULTS.rpcUrl,
   },
   COSTON2: {
-    chainId: 114,
-    escrowAddress: '0x3419513f9636760C29033Fed040E7E1278Fa7B2b',
-    fxrpTokenAddress: '0x0b6A3645c240605887a5532109323A3E12273dc7',
-    yFXRPTokenAddress: '0xe07484f61fc5C02464ceE533D7535D0b5a257f22',
-    firelightVaultAddress: '0xe07484f61fc5C02464ceE533D7535D0b5a257f22',
-    mockOOv3Address: '0x4986BcE3A5517FEB4373B07a1FFF0ed4e2C8B340',
-    deploymentBlock: 26987203,
+    chainId: COSTON2_FIRELIGHT_DEFAULTS.chainId,
+    escrowAddress: COSTON2_FIRELIGHT_DEFAULTS.escrowAddress,
+    fxrpTokenAddress: COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress,
+    yFXRPTokenAddress: COSTON2_FIRELIGHT_DEFAULTS.fFXRPVaultAddress,
+    firelightVaultAddress: COSTON2_FIRELIGHT_DEFAULTS.fFXRPVaultAddress,
+    mockOOv3Address: COSTON2_FIRELIGHT_DEFAULTS.mockOOv3Address,
+    deploymentBlock: COSTON2_FIRELIGHT_DEFAULTS.deploymentBlock,
+    rpcUrl: COSTON2_FIRELIGHT_DEFAULTS.rpcUrl,
   },
 } as const;
 
-// Default to Coston2 (Firelight)
 export const DEFAULT_NETWORK = 'COSTON2';
 export const ESCROW_ADDRESS = NETWORKS.COSTON2.escrowAddress;
 export const MOCK_TOKEN_ADDRESS = NETWORKS.COSTON2.fxrpTokenAddress;

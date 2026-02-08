@@ -1,50 +1,56 @@
 import { ethers } from "hardhat";
 import fs from "fs";
 import path from "path";
+import { TESTNET_CONFIG } from "../../config";
+
+/**
+ * Deploy only AgentTaskEscrow + MockOOv3 (UMA) on Coston2.
+ * Does NOT deploy any vault or token – reuses existing FXRP and yFXRP vault addresses.
+ */
 
 const FIRELIGHT_VAULT_COSTON2 = "0x91Bfe6A68aB035DFebb6A770FFfB748C03C0E40B";
-const FTESTXRP_COSTON2 = "0x0b6A3645c240605887a5532109323A3E12273dc7"; // Real FTestXRP (6 decimals)
-const CUSTOM_VAULT_COSTON2 = "0xe07484f61fc5C02464ceE533D7535D0b5a257f22"; // Custom yFXRP vault
+const FTESTXRP_COSTON2 = "0x0b6A3645c240605887a5532109323A3E12273dc7"; // Existing FTestXRP (6 decimals)
+const CUSTOM_VAULT_COSTON2 = "0xe07484f61fc5C02464ceE533D7535D0b5a257f22"; // Existing custom yFXRP vault
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
-  console.log("Deploying to Flare Coston2...");
-  console.log("Deployer:", await deployer.getAddress());
+  const [deployer, _client, _agent, marketMaker] = await ethers.getSigners();
+  console.log("Deploying to Flare Coston2 (escrow + MockOOv3 only, no vault)...");
+  console.log("  Deployer:", await deployer.getAddress());
+  console.log("  MarketMaker:", await marketMaker.getAddress());
 
-  // 1. Use existing FTestXRP token (6 decimals, compatible with Firelight)
   const fxrpAddress = FTESTXRP_COSTON2;
-  console.log("✓ Using FTestXRP:", fxrpAddress);
+  console.log("  Reusing existing FXRP:", fxrpAddress);
+  console.log("  Reusing existing yFXRP vault:", CUSTOM_VAULT_COSTON2);
 
-  // 2. Deploy MockOptimisticOracleV3
+  // 1. Deploy MockOptimisticOracleV3
   const MockOOv3 = await ethers.getContractFactory("MockOptimisticOracleV3");
   const mockOOv3 = await MockOOv3.deploy();
   await mockOOv3.waitForDeployment();
   console.log("✓ MockOOv3:", await mockOOv3.getAddress());
 
-  // 3. Deploy AgentTaskEscrow with two-token support
+  // 2. Deploy AgentTaskEscrow – same timing/bond params as Plasma (TESTNET_CONFIG)
   const AgentTaskEscrow = await ethers.getContractFactory("AgentTaskEscrow");
   const escrow = await AgentTaskEscrow.deploy(
-    await deployer.getAddress(), // Market maker
-    0, // No market maker fee for testing
-    86400, // 24hr cooldown
-    172800, // 48hr agent response window
-    1000, // 10% dispute bond
-    1000, // 10% escalation bond
+    await marketMaker.getAddress(),
+    0,
+    TESTNET_CONFIG.COOLDOWN_PERIOD,
+    TESTNET_CONFIG.AGENT_RESPONSE_WINDOW,
+    TESTNET_CONFIG.DISPUTE_BOND_BPS,
+    TESTNET_CONFIG.ESCALATION_BOND_BPS,
     await mockOOv3.getAddress(),
-    7200, // 2hr UMA liveness
+    TESTNET_CONFIG.UMA_LIVENESS,
     ethers.keccak256(ethers.toUtf8Bytes("AGENT_TASK_V1")),
-    ethers.parseEther("10"), // 10 FXRP min UMA bond
-    [fxrpAddress, CUSTOM_VAULT_COSTON2] // Allowed tokens: FXRP and yFXRP
+    TESTNET_CONFIG.UMA_MINIMUM_BOND,
+    [fxrpAddress, CUSTOM_VAULT_COSTON2] // Allowed tokens: FXRP and yFXRP (only difference vs Plasma)
   );
   await escrow.waitForDeployment();
   console.log("✓ AgentTaskEscrow:", await escrow.getAddress());
   console.log("  Whitelisted FXRP:", fxrpAddress);
   console.log("  Whitelisted yFXRP:", CUSTOM_VAULT_COSTON2);
 
-  // 4. Note: FTestXRP is already deployed - get from faucet at https://faucet.flare.network
-  console.log("ℹ️  Get FTestXRP from faucet: https://faucet.flare.network");
+  console.log("ℹ️  FTestXRP from faucet: https://faucet.flare.network");
 
-  // 5. Save deployment config
+  // 3. Save deployment config
   const deployment = {
     chainId: 114,
     network: "coston2-testnet",

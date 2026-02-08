@@ -3,6 +3,7 @@ import { AGENTS_BASE_URL } from '@/config/constants';
 
 export interface Erc8001DirectDispatchRequest {
   agentId: string;
+  chainId: number;
   onchainTaskId: string;
   stakeAmountWei: string;
   skill?: string;
@@ -19,6 +20,7 @@ export interface Erc8001DirectDispatchResponse {
 
 export interface Erc8001PaymentDepositedDirectRequest {
   agentId: string;
+  chainId: number;
   onchainTaskId: string;
 }
 
@@ -70,6 +72,7 @@ export async function dispatchErc8001TaskDirect(
       ...(request.model ? { model: request.model } : {}),
     },
     erc8001: {
+      chainId: request.chainId,
       taskId: request.onchainTaskId,
       stakeAmountWei: request.stakeAmountWei,
       publicBaseUrl: AGENTS_BASE_URL,
@@ -108,6 +111,7 @@ export async function notifyErc8001PaymentDepositedDirect(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      chainId: request.chainId,
       onchainTaskId: request.onchainTaskId,
     }),
   });

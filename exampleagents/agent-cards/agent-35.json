@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0074,
-      "price": 0.0091
+      "stake": 0.000074,
+      "price": 0.000091
     },
     {
       "id": "downside_risk_sentiment",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0078,
-      "price": 0.0096
+      "stake": 0.000078,
+      "price": 0.000096
     }
   ]
 }

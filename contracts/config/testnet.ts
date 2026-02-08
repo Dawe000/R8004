@@ -8,5 +8,6 @@ export const TESTNET_CONFIG = {
   UMA_LIVENESS: 180, // 3 min - UMA dispute window
   DISPUTE_BOND_BPS: 100, // 1%
   ESCALATION_BOND_BPS: 100, // 1%
-  UMA_MINIMUM_BOND: 1n * 10n ** 18n, // 1 token
+  /** 0.01 USDT in 6 decimals – small enough for testnet path-b-uma-escalate */
+  UMA_MINIMUM_BOND: 10_000n, // 1e4
 };

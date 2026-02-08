@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Clock, ShieldAlert, Coins } from 'lucide-react';
+import { Clock, ShieldAlert } from 'lucide-react';
 
 interface TaskConfigFormProps {
   paymentAmount: string;
   tokenSymbol: string;
   onDeadlineChange: (deadline: number) => void;
+  readOnly?: boolean;
 }
 
-export function TaskConfigForm({ paymentAmount, tokenSymbol, onDeadlineChange }: TaskConfigFormProps) {
+export function TaskConfigForm({
+  paymentAmount,
+  tokenSymbol,
+  onDeadlineChange,
+  readOnly = false,
+}: TaskConfigFormProps) {
   const [duration, setDuration] = useState(24); // Default 24 hours
   const [disputeBond, setDisputeBond] = useState('0');
 
@@ -45,9 +48,16 @@ export function TaskConfigForm({ paymentAmount, tokenSymbol, onDeadlineChange }:
           min={1}
           step={1}
           value={[duration]}
-          onValueChange={(val) => setDuration(val[0])}
-          className="py-2"
+          disabled={readOnly}
+          onValueChange={(val) => {
+            if (readOnly) return;
+            setDuration(val[0]);
+          }}
+          className={`py-2 ${readOnly ? 'opacity-60' : ''}`}
         />
+        {readOnly && (
+          <p className="text-[10px] text-muted-foreground/80">Deadline is locked while this task is in progress.</p>
+        )}
         <p className="text-[10px] text-muted-foreground">
           Agent must complete the task by {new Date(Date.now() + duration * 3600 * 1000).toLocaleString()}
         </p>

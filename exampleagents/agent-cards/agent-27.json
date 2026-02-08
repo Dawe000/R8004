@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0062,
-      "price": 0.0076
+      "stake": 0.000062,
+      "price": 0.000076
     },
     {
       "id": "complaint_theme_extraction",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0064,
-      "price": 0.0078
+      "stake": 0.000064,
+      "price": 0.000078
     }
   ]
 }

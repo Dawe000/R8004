@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0046,
-      "price": 0.0068
+      "stake": 0.000046,
+      "price": 0.000068
     },
     {
       "id": "jurisdiction_comparison",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0048,
-      "price": 0.007
+      "stake": 0.000048,
+      "price": 0.00007
     }
   ]
 }

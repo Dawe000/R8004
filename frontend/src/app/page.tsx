@@ -5,11 +5,12 @@ import { TaskSearchBox } from '@/components/TaskSearchBox';
 import { AgentRoutesList } from '@/components/AgentRoutesList';
 import { TaskConfigForm } from '@/components/TaskConfigForm';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
+import { ExchangeTaskProgressPanel } from '@/components/ExchangeTaskProgressPanel';
 import { useAgentMatching } from '@/hooks/useAgentMatching';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
-import { Settings, RefreshCw, ArrowDown } from 'lucide-react';
+import { Settings, RefreshCw } from 'lucide-react';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import DarkVeil from '@/components/ui/DarkVeil';
 import Image from 'next/image';
@@ -22,7 +23,7 @@ import {
   notifyErc8001PaymentDepositedDirect,
 } from '@/lib/api/agents';
 import { getTaskDispatchMeta, upsertTaskDispatchMeta } from '@/lib/taskMeta';
-import { formatEther, parseEther } from 'ethers';
+import { formatUnits, parseUnits } from 'ethers';
 import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { TaskStatus, type Task } from '@sdk/types';
 import {
@@ -31,6 +32,7 @@ import {
   PLASMA_TESTNET_DEFAULTS,
 } from '@sdk/index';
 import { toast } from 'sonner';
+import { getDisputeStatusMessage } from '@/lib/disputeFlow';
 
 const TASK_STATUS_LABELS: Record<number, string> = {
   0: 'None',
@@ -49,6 +51,28 @@ const TERMINAL_STATUSES = new Set<number>([
   TaskStatus.AgentFailed,
   TaskStatus.Resolved,
 ]);
+
+const CONTESTATION_VISIBLE_STATUSES = new Set<number>([
+  TaskStatus.ResultAsserted,
+  TaskStatus.DisputedAwaitingAgent,
+  TaskStatus.EscalatedToUMA,
+  TaskStatus.Resolved,
+]);
+
+const SUPPORTED_DIRECT_EXECUTION_CHAINS = new Set<number>([
+  PLASMA_TESTNET_DEFAULTS.chainId,
+  COSTON2_FIRELIGHT_DEFAULTS.chainId,
+]);
+
+const MARKETMAKER_STAKE_DECIMALS = 18;
+
+function scaleAmount(rawAmount: bigint, fromDecimals: number, toDecimals: number): bigint {
+  if (fromDecimals === toDecimals) return rawAmount;
+  if (fromDecimals > toDecimals) {
+    return rawAmount / (10n ** BigInt(fromDecimals - toDecimals));
+  }
+  return rawAmount * (10n ** BigInt(toDecimals - fromDecimals));
+}
 
 export default function Home() {
   const { address } = useAccount();
@@ -69,24 +93,23 @@ export default function Home() {
   const [agentResult, setAgentResult] = useState<unknown>(null);
   const [pollError, setPollError] = useState<string | null>(null);
 
-  const { data: agents, isLoading, error } = useAgentMatching(query);
-  const sdk = useAgentSDK();
-  const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
-  const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
+    const { data: agents, isLoading, error } = useAgentMatching(query);
+    const sdk = useAgentSDK();
+    const { agentResponseWindowSec, disputeBondBps, isLoading: escrowTimingLoading } = useEscrowTiming();
+  
+    const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
+    const isCoston2Chain = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId;
+  const isSupportedExecutionChain = SUPPORTED_DIRECT_EXECUTION_CHAINS.has(chainId);
   const paymentTokenAddress = isPlasmaChain
     ? PLASMA_TESTNET_DEFAULTS.mockTokenAddress
-    : COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress;
+    : isCoston2Chain
+      ? COSTON2_FIRELIGHT_DEFAULTS.fxrpTokenAddress
+      : PLASMA_TESTNET_DEFAULTS.mockTokenAddress;
 
   const selectedAgent = useMemo(() => {
     if (!selectedAgentId || !agents) return null;
     return agents.find((agent) => agent.agent.agentId === selectedAgentId) || null;
   }, [agents, selectedAgentId]);
-
-  useEffect(() => {
-    if (!selectedAgent?.agent.sla?.minAcceptanceStake) return;
-    const minStake = formatEther(selectedAgent.agent.sla.minAcceptanceStake);
-    setPaymentAmount(minStake);
-  }, [selectedAgent]);
 
   const { data: balance } = useReadContract({
     address: paymentTokenAddress as `0x${string}`,
@@ -123,8 +146,45 @@ export default function Home() {
     },
   });
 
+  const { data: paymentTokenDecimalsData } = useReadContract({
+    address: paymentTokenAddress as `0x${string}`,
+    abi: [
+      {
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }],
+      },
+    ],
+    functionName: 'decimals',
+    query: {
+      enabled: !!address,
+    },
+  });
+
+  const paymentTokenDecimals =
+    typeof paymentTokenDecimalsData === 'number'
+      ? paymentTokenDecimalsData
+      : isCoston2Chain
+        ? 6
+        : 18;
+
   const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined)
-    || (isPlasmaChain ? 'TST' : 'FXRP');
+    || (isPlasmaChain ? 'TST' : isCoston2Chain ? 'C2FLR' : 'TOKEN');
+
+  const networkLogo = isCoston2Chain ? "/flare.png" : "/chain-light.svg";
+
+  useEffect(() => {
+    if (!selectedAgent?.agent.sla?.minAcceptanceStake) return;
+    const rawStake = BigInt(selectedAgent.agent.sla.minAcceptanceStake);
+    const tokenStake = scaleAmount(
+      rawStake,
+      MARKETMAKER_STAKE_DECIMALS,
+      paymentTokenDecimals
+    );
+    setPaymentAmount(formatUnits(tokenStake, paymentTokenDecimals));
+  }, [paymentTokenDecimals, selectedAgent]);
 
   const refreshActiveTask = useCallback(async () => {
     if (!sdk || activeTaskId === null) return;
@@ -196,9 +256,9 @@ export default function Home() {
     const toastId = toast.loading('Creating task intent on-chain...');
 
     try {
-      if (!isPlasmaChain) {
+      if (!isSupportedExecutionChain) {
         throw new Error(
-          `Direct agent execution currently supports Plasma only. Switch wallet network to Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}).`
+          `Direct agent execution supports Plasma Testnet (${PLASMA_TESTNET_DEFAULTS.chainId}) and Flare Coston2 (${COSTON2_FIRELIGHT_DEFAULTS.chainId}).`
         );
       }
 
@@ -206,7 +266,12 @@ export default function Home() {
         throw new Error('Selected agent is missing minAcceptanceStake');
       }
 
-      const amount = parseEther(paymentAmount);
+      const amount = parseUnits(paymentAmount, paymentTokenDecimals);
+      const stakeAmount = scaleAmount(
+        BigInt(selectedAgent.agent.sla.minAcceptanceStake),
+        MARKETMAKER_STAKE_DECIMALS,
+        paymentTokenDecimals
+      );
 
       const taskSpecUri = await createTaskSpecUri({
         version: ONCHAIN_TASK_SPEC_V1,
@@ -227,8 +292,9 @@ export default function Home() {
 
       const dispatchResult = await dispatchErc8001TaskDirect({
         agentId: selectedAgent.agent.agentId,
+        chainId,
         onchainTaskId: taskId.toString(),
-        stakeAmountWei: selectedAgent.agent.sla.minAcceptanceStake,
+        stakeAmountWei: stakeAmount.toString(),
         skill: selectedAgent.agent.skills?.[0]?.id,
       });
 
@@ -243,7 +309,7 @@ export default function Home() {
       if (typeof window !== 'undefined') {
         const savedTasks = JSON.parse(localStorage.getItem('r8004_tasks') || '[]');
         localStorage.setItem('r8004_tasks', JSON.stringify([...savedTasks, taskId.toString()]));
-        upsertTaskDispatchMeta(taskId.toString(), {
+        upsertTaskDispatchMeta(chainId, taskId.toString(), {
           agentId: dispatchResult.agentId,
           runId: dispatchResult.runId,
         });
@@ -263,7 +329,12 @@ export default function Home() {
 
   const handleNotifyPaymentDeposited = useCallback(
     async (taskId: bigint) => {
-      const dispatchMeta = getTaskDispatchMeta(taskId.toString());
+      if (!isSupportedExecutionChain) {
+        toast.warning('Agent payment notification is only available on supported execution chains.');
+        return;
+      }
+
+      const dispatchMeta = getTaskDispatchMeta(chainId, taskId.toString());
       if (!dispatchMeta?.agentId) {
         toast.warning('Payment deposited, but agent notification metadata is missing for this task.');
         return;
@@ -274,6 +345,7 @@ export default function Home() {
       try {
         await notifyErc8001PaymentDepositedDirect({
           agentId: dispatchMeta.agentId,
+          chainId,
           onchainTaskId: taskId.toString(),
         });
         toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
@@ -284,7 +356,7 @@ export default function Home() {
         setIsNotifyingPayment(false);
       }
     },
-    []
+    [chainId, isSupportedExecutionChain]
   );
 
   const handleDepositPayment = async () => {
@@ -312,9 +384,38 @@ export default function Home() {
   const taskStatusLabel = activeTaskStatus === null
     ? 'No Active Task'
     : TASK_STATUS_LABELS[activeTaskStatus] || `Unknown (${activeTaskStatus})`;
+  const isTaskInProgress = activeTaskId !== null
+    && (activeTaskStatus === null || !TERMINAL_STATUSES.has(activeTaskStatus));
+  const showRecommendedAgents = !isTaskInProgress;
   const showCreateButton =
     activeTaskId === null
     || (activeTaskStatus !== null && TERMINAL_STATUSES.has(activeTaskStatus));
+  const showTaskActions = activeTaskStatus !== null && CONTESTATION_VISIBLE_STATUSES.has(activeTaskStatus);
+  const hasResultGenerated = activeTaskStatus !== null && activeTaskStatus >= TaskStatus.ResultAsserted;
+  const showDepositPaymentButton = activeTaskId !== null
+    && activeTaskStatus === TaskStatus.Accepted
+    && !paymentDeposited
+    && !hasResultGenerated;
+  const showNotifyPaymentButton = activeTaskId !== null
+    && activeTaskStatus === TaskStatus.Accepted
+    && paymentDeposited
+    && !hasResultGenerated;
+  const hasRequestLowerContent = showTaskActions
+    || showCreateButton
+    || (activeTaskStatus !== null && TERMINAL_STATUSES.has(activeTaskStatus));
+  const activeTaskDisputeMessage = activeTask
+    && (
+      Number(activeTask.status) === TaskStatus.ResultAsserted
+      || Number(activeTask.status) === TaskStatus.DisputedAwaitingAgent
+      || Number(activeTask.status) === TaskStatus.EscalatedToUMA
+      || Number(activeTask.status) === TaskStatus.Resolved
+    )
+    ? getDisputeStatusMessage(
+        activeTask,
+        BigInt(Math.floor(Date.now() / 1000)),
+        agentResponseWindowSec ?? 0n
+      )
+    : null;
 
   return (
     <main className="h-screen w-full bg-[#0a0a0f] text-foreground flex flex-col overflow-hidden relative">
@@ -343,199 +444,213 @@ export default function Home() {
           <Link href="/activity">
             <button className="px-4 py-1.5 rounded-full hover:bg-white/5 text-muted-foreground font-medium text-xs transition-all">Activity</button>
           </Link>
+          <Link href="/plasma">
+            <button
+              className={`px-4 py-1.5 rounded-full font-bold text-xs transition-all ${
+                isPlasmaChain
+                  ? 'bg-[#162f29] text-[#4ade80] shadow-lg shadow-green-900/20'
+                  : 'hover:bg-[#162f29]/20 text-muted-foreground hover:text-[#4ade80]'
+              }`}
+            >
+              Plasma Flow
+            </button>
+          </Link>
+          <Link href="/fassets">
+            <button
+              className={`px-4 py-1.5 rounded-full font-bold text-xs transition-all ${
+                isCoston2Chain
+                  ? 'bg-[#fbcfe8] text-[#be185d] shadow-lg shadow-pink-500/20'
+                  : 'hover:bg-[#fbcfe8]/10 text-muted-foreground hover:text-[#fbcfe8]'
+              }`}
+            >
+              FAssets Flow
+            </button>
+          </Link>
         </div>
         <ConnectButton />
       </nav>
 
       <div className="flex-1 w-full flex items-center justify-center relative z-20 p-4">
-        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 h-[600px]">
+        <div className="w-full max-w-4xl mx-auto transition-all duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8 h-[600px]">
           <Card className="flex flex-col p-8 bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem] relative overflow-hidden h-full">
             <div className="flex justify-between items-center mb-6 flex-none">
-              <h2 className="text-2xl font-bold tracking-tight text-white">Request Task</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  {hasResultGenerated ? 'Task Outcome' : 'Request Task'}
+                </h2>
+              </div>
               <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                 <Settings className="text-muted-foreground w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-3 relative min-h-0 overflow-y-auto pr-2">
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors flex-none">
-                <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest">Task Description</label>
-                <TaskSearchBox onSearch={setQuery} />
-              </div>
-
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-                <div className="bg-[#0a0a0f]/90 backdrop-blur-md p-2 rounded-xl border border-white/10 shadow-2xl">
-                  <div className="bg-white/5 p-1 rounded text-primary">
-                    <ArrowDown className="w-5 h-5" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10 flex-none">
-                <label className="text-[10px] font-bold text-muted-foreground mb-1 block uppercase tracking-widest">Estimated Cost</label>
-                <div className="flex justify-between items-end">
-                  {selectedAgentId ? (
-                    <input
-                      type="text"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full animate-in fade-in slide-in-from-left-2"
+            <div className={`flex-1 flex flex-col gap-3 relative min-h-0 pr-2 custom-scrollbar overflow-y-auto`}>
+              {!hasResultGenerated ? (
+                <>
+                  <div className={`bg-white/[0.05] rounded-3xl p-6 border border-white/10 hover:border-primary/40 transition-colors ${hasRequestLowerContent ? 'flex-none' : 'flex-1 min-h-0 flex flex-col'}`}>
+                    <label className="text-[10px] font-bold text-muted-foreground mb-3 block uppercase tracking-widest">Task Description</label>
+                    <TaskSearchBox
+                      onSearch={setQuery}
+                      readOnly={isTaskInProgress}
+                      expanded={!hasRequestLowerContent}
                     />
-                  ) : (
-                    <div className="text-2xl font-bold text-white/20 tracking-tight h-[60px] flex items-center">
-                      Search & Select Agent...
+                  </div>
+
+                  <div className={`bg-white/[0.05] rounded-3xl p-6 border border-white/10 ${hasRequestLowerContent ? 'flex-none' : 'flex-1 min-h-0'}`}>
+                    <label className="text-[10px] font-bold text-muted-foreground mb-1 block uppercase tracking-widest">Estimated Cost</label>
+                    <div className="flex justify-between items-end">
+                      {selectedAgentId ? (
+                        <input
+                          type="text"
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          className="text-5xl font-black text-white tracking-tighter bg-transparent border-none outline-none w-full animate-in fade-in slide-in-from-left-2"
+                        />
+                      ) : (
+                        <div className="text-2xl font-bold text-white/20 tracking-tight h-[60px] flex items-center">
+                          Search & Select Agent...
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1 flex-none">
+                          <Image
+                            src={networkLogo}
+                            alt="Network Logo"
+                            width={24}
+                            height={24}
+                            className="w-5 h-5 object-contain"
+                          />
+                          <span className="font-bold text-base text-white">{paymentTokenSymbol}</span>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
+                      {selectedAgentId ? (
+                        <>
+                          <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
+                          <span>
+                            Balance: {balance ? parseFloat(formatUnits(balance as bigint, paymentTokenDecimals)).toFixed(4) : '0.00'} {paymentTokenSymbol}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
+                      )}
+                    </div>
+
+                    {selectedAgentId && (
+                      <TaskConfigForm
+                        paymentAmount={paymentAmount}
+                        tokenSymbol={paymentTokenSymbol}
+                        onDeadlineChange={setDeadline}
+                        readOnly={isTaskInProgress}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+                  <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10">
+                    <label className="text-[10px] font-bold text-emerald-400 mb-3 block uppercase tracking-widest flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Agent Result
+                    </label>
+                    <div className="bg-black/40 rounded-2xl border border-white/5 p-4 min-h-[120px] max-h-[200px] overflow-y-auto custom-scrollbar">
+                      {agentResult !== null ? (
+                        <pre className="text-[11px] text-slate-200 whitespace-pre-wrap font-mono leading-relaxed">
+                          {typeof agentResult === 'string'
+                            ? agentResult
+                            : JSON.stringify(agentResult, null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 opacity-40">
+                          <RefreshCw className="w-6 h-6 animate-spin mb-2" />
+                          <span className="text-[10px] font-bold">Fetching result data...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {activeTask && (
+                    <div className="bg-white/[0.05] rounded-3xl p-6 border border-white/10">
+                      <label className="text-[10px] font-bold text-primary mb-3 block uppercase tracking-widest">Contestation Window</label>
+                      <TaskContestationActions
+                        task={activeTask}
+                        connectedAddress={address}
+                        agentResponseWindowSec={agentResponseWindowSec}
+                        disputeBondBps={disputeBondBps}
+                        escrowTimingLoading={escrowTimingLoading}
+                        onTaskUpdated={refreshActiveTask}
+                      />
+                      {activeTaskDisputeMessage && (
+                        <p className="mt-4 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[10px] text-orange-200/90 leading-relaxed italic text-center">
+                          {activeTaskDisputeMessage}
+                        </p>
+                      )}
                     </div>
                   )}
-                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-1 flex-none">
-                      <Image
-                        src="/chain-light.svg"
-                        alt="Network Logo"
-                        width={24}
-                        height={24}
-                        className="w-5 h-5 object-contain"
-                      />
-                      <span className="font-bold text-base text-white">{paymentTokenSymbol}</span>
-                  </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground flex justify-between mt-2 font-medium h-4">
-                  {selectedAgentId ? (
-                    <>
-                      <span>~ ${(parseFloat(paymentAmount) * 2500 || 0).toLocaleString()} USD</span>
-                      <span>Balance: {balance ? parseFloat(formatEther(balance as bigint)).toFixed(4) : '0.00'} {paymentTokenSymbol}</span>
-                    </>
-                  ) : (
-                    <span className="opacity-50 italic text-[9px]">Awaiting selection to calculate fees...</span>
-                  )}
-                </div>
-
-                {selectedAgentId && (
-                  <TaskConfigForm
-                    paymentAmount={paymentAmount}
-                    tokenSymbol={paymentTokenSymbol}
-                    onDeadlineChange={setDeadline}
-                  />
-                )}
-              </div>
+              )}
             </div>
 
-            {activeTaskId !== null && (
-              <div className="mt-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 text-xs space-y-2">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>On-chain Task ID</span>
-                  <span className="font-mono text-white">{activeTaskId.toString()}</span>
-                </div>
-                {activeAgentRunId && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Agent Run ID</span>
-                    <span className="font-mono text-white">{activeAgentRunId}</span>
-                  </div>
+            {hasRequestLowerContent && (
+              <div className="mt-8 flex-none space-y-3">
+                {showCreateButton && (
+                  <button
+                    onClick={handleCreateTask}
+                    disabled={!selectedAgentId || isCreating}
+                    className={`w-full py-4 font-black text-lg rounded-2xl transition-all shadow-2xl ${
+                      selectedAgentId && !isCreating
+                        ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/40 scale-[1.02]'
+                        : 'bg-white/10 text-muted-foreground cursor-not-allowed border border-white/5'
+                    }`}
+                  >
+                    {isCreating
+                      ? 'Creating Task...'
+                      : selectedAgentId
+                        ? 'Create Task & Dispatch Agent'
+                        : 'Select an Agent'}
+                  </button>
                 )}
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Status</span>
-                  <span className="text-white">{taskStatusLabel}</span>
-                </div>
-                {activeTask && (
-                  <>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Client</span>
-                      <span className="font-mono text-white">{activeTask.client.slice(0, 6)}...{activeTask.client.slice(-4)}</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Agent</span>
-                      <span className="font-mono text-white">
-                        {activeTask.agent === '0x0000000000000000000000000000000000000000'
-                          ? 'Waiting...'
-                          : `${activeTask.agent.slice(0, 6)}...${activeTask.agent.slice(-4)}`}
-                      </span>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Payment Deposited</span>
-                  <span className={paymentDeposited ? 'text-green-400' : 'text-yellow-300'}>
-                    {paymentDeposited ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                {activeTask?.resultURI && (
-                  <div className="break-all text-muted-foreground">
-                    <span>Result URI: </span>
-                    <span className="text-white">{activeTask.resultURI}</span>
-                  </div>
-                )}
-                {pollError && <p className="text-destructive">Polling error: {pollError}</p>}
-                {agentResult !== null && (
-                  <pre className="max-h-28 overflow-y-auto bg-black/30 border border-white/10 rounded-lg p-2 text-[10px] text-slate-200">
-                    {typeof agentResult === 'string'
-                      ? agentResult
-                      : JSON.stringify(agentResult, null, 2)}
-                  </pre>
-                )}
-                {activeTask && (
-                  <TaskContestationActions
-                    task={activeTask}
-                    connectedAddress={address}
-                    agentResponseWindowSec={agentResponseWindowSec}
-                    disputeBondBps={disputeBondBps}
-                    onTaskUpdated={refreshActiveTask}
-                  />
+
+                {activeTaskStatus !== null && TERMINAL_STATUSES.has(activeTaskStatus) && (
+                  <p className="text-[11px] text-muted-foreground text-center">Task reached terminal status: {taskStatusLabel}</p>
                 )}
               </div>
             )}
-
-            <div className="mt-8 flex-none space-y-3">
-              {showCreateButton && (
-                <button
-                  onClick={handleCreateTask}
-                  disabled={!selectedAgentId || isCreating}
-                  className={`w-full py-4 font-black text-lg rounded-2xl transition-all shadow-2xl ${
-                    selectedAgentId && !isCreating
-                      ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/40 scale-[1.02]'
-                      : 'bg-white/10 text-muted-foreground cursor-not-allowed border border-white/5'
-                  }`}
-                >
-                  {isCreating
-                    ? 'Creating Task...'
-                    : selectedAgentId
-                      ? 'Create Task & Dispatch Agent'
-                      : 'Select an Agent'}
-                </button>
-              )}
-
-              {activeTaskId !== null && activeTaskStatus === TaskStatus.Accepted && !paymentDeposited && (
-                <button
-                  onClick={handleDepositPayment}
-                  disabled={isDepositing}
-                  className="w-full py-3 font-bold text-sm rounded-2xl transition-all bg-emerald-500 hover:bg-emerald-400 text-black"
-                >
-                  {isDepositing ? 'Depositing Payment...' : 'Deposit Payment (Manual Step)'}
-                </button>
-              )}
-
-              {activeTaskId !== null && activeTaskStatus === TaskStatus.Accepted && paymentDeposited && (
-                <button
-                  onClick={() => void handleNotifyPaymentDeposited(activeTaskId)}
-                  disabled={isNotifyingPayment}
-                  className="w-full py-3 font-bold text-sm rounded-2xl transition-all bg-cyan-400 hover:bg-cyan-300 text-black"
-                >
-                  {isNotifyingPayment ? 'Notifying Agent...' : 'Notify Agent Payment Deposited'}
-                </button>
-              )}
-
-              {activeTaskStatus !== null && TERMINAL_STATUSES.has(activeTaskStatus) && (
-                <p className="text-[11px] text-muted-foreground text-center">Task reached terminal status: {taskStatusLabel}</p>
-              )}
-            </div>
           </Card>
 
           <Card className="flex flex-col p-8 bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem] h-full overflow-hidden relative">
             <div className="flex justify-between items-center mb-6 flex-none">
-              <h3 className="text-2xl font-bold text-white tracking-tight">Recommended Agents</h3>
-              {isLoading && <RefreshCw className="animate-spin w-5 h-5 text-primary" />}
+              <h3 className="text-2xl font-bold text-white tracking-tight">
+                {showRecommendedAgents ? 'Recommended Agents' : 'Task Progress'}
+              </h3>
+              {showRecommendedAgents && isLoading && <RefreshCw className="animate-spin w-5 h-5 text-primary" />}
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-1 flex flex-col h-full min-h-0 custom-scrollbar">
-              <div className="flex-1 min-h-0">
-                {isLoading ? (
+            <div className="flex-1 pr-1 flex flex-col h-full min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {!showRecommendedAgents && activeTaskId !== null ? (
+                  <ExchangeTaskProgressPanel
+                    activeTaskId={activeTaskId}
+                    activeAgentRunId={activeAgentRunId}
+                    taskStatusLabel={taskStatusLabel}
+                    activeTask={activeTask}
+                    paymentDeposited={paymentDeposited}
+                    pollError={pollError}
+                    agentResult={agentResult}
+                    activeTaskDisputeMessage={activeTaskDisputeMessage}
+                    selectedAgent={selectedAgent}
+                    selectedAgentId={selectedAgentId}
+                    showDepositPaymentButton={showDepositPaymentButton}
+                    showNotifyPaymentButton={showNotifyPaymentButton}
+                    isDepositing={isDepositing}
+                    isNotifyingPayment={isNotifyingPayment}
+                    onDepositPayment={() => {
+                      void handleDepositPayment();
+                    }}
+                    onNotifyPayment={() => {
+                      void handleNotifyPaymentDeposited(activeTaskId);
+                    }}
+                  />
+                ) : isLoading ? (
                   <div className="flex-1 space-y-4 h-full">
                     {[1, 2, 3].map((i) => (
                       <Skeleton key={i} className="h-[30%] w-full rounded-3xl bg-white/5" />

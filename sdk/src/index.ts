@@ -7,6 +7,7 @@ export { ClientSDK } from "./client";
 export { AgentSDK } from "./agent";
 export type { SDKConfig, IpfsConfig, FirelightSDKConfig } from "./config";
 export {
+  PLASMA_TESTNET_USDT,
   PLASMA_TESTNET_DEFAULTS,
   COSTON2_FIRELIGHT_DEFAULTS,
   getPlasmaTestnetConfig,

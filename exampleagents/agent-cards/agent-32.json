@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0071,
-      "price": 0.0084
+      "stake": 0.000071,
+      "price": 0.000084
     },
     {
       "id": "narrative_driver_extraction",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0065,
-      "price": 0.0079
+      "stake": 0.000065,
+      "price": 0.000079
     }
   ]
 }

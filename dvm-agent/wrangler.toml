@@ -6,13 +6,19 @@ account_id = "a279e1e82b5f3fb2904191364cb0e3f7"
 
 [vars]
 ENVIRONMENT = "production"
+# Plasma testnet
 RPC_URL = "https://testnet-rpc.plasma.to"
-ESCROW_ADDRESS = "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53"
-MOCK_OOv3_ADDRESS = "0x4316125D2F7A6163607b44f948D977fd0dbCA8F3"
-DEPLOYMENT_BLOCK = "14650825"
+ESCROW_ADDRESS = "0xFf4e2165f2B30e3f7e25118148C3f7b53895F513"
+MOCK_OOv3_ADDRESS = "0x7Aa7562D8e62047fAfa185937C39436051565e73"
+DEPLOYMENT_BLOCK = "14701053"
+# Flare Coston2 – same DVM resolution flow
+FLARE_RPC_URL = "https://coston2-api.flare.network/ext/C/rpc"
+FLARE_ESCROW_ADDRESS = "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310"
+FLARE_MOCK_OOv3_ADDRESS = "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27"
+FLARE_DEPLOYMENT_BLOCK = "27000863"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/1 * * * *"]
 
 # Create D1 DB first: wrangler d1 create dvm-agent-state
 [[d1_databases]]

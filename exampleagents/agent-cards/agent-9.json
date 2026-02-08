@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0037,
-      "price": 0.0076
+      "stake": 0.000037,
+      "price": 0.000076
     },
     {
       "id": "action_items",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0039,
-      "price": 0.0079
+      "stake": 0.000039,
+      "price": 0.000079
     }
   ]
 }

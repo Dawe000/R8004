@@ -44,8 +44,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0019,
-      "price": 0.0052
+      "stake": 0.000019,
+      "price": 0.000052
     },
     {
       "id": "company_snapshot",
@@ -69,8 +69,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0021,
-      "price": 0.0055
+      "stake": 0.000021,
+      "price": 0.000055
     }
   ]
 }

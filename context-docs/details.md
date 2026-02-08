@@ -9,14 +9,14 @@ We create an ERC8001 intents-based system for agent tasks, with a market maker t
 **References:**
 
 - https://eips.ethereum.org/EIPS/eip-8001
-- https://docs.uma.xyz/protocol-overview/how-does-umas-oracle-work
+- [UMA Oracle](https://docs.uma.xyz/protocol-overview/how-does-umas-oracle-work) · [UMA DVM 2.0](https://docs.uma.xyz/protocol-overview/dvm-2.0)
 
 ---
 
 ## PREREQUISITES
 
-- Trust system (ERC8004 with semantic search)
-- Search system (operational)
+- Trust system (ERC8004 with semantic search) — see [Lyneth Labs Whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper)
+- Search system (operational) — see [Agent0 Semantic Search Service](https://github.com/agent0lab/search-service)
 
 ---
 
@@ -35,7 +35,7 @@ Client creates a natural language request in our smart contract.
 
 ### 2. Agent Discovery & Selection
 
-Market maker (us) routes this to an agent using ERC8004-backed semantic search over registered agents and their declared actions/capabilities.
+Market maker (us) routes this to an agent using [ERC8004-backed semantic search](https://github.com/agent0lab/search-service) over registered agents and their declared actions/capabilities.
 
 ### 3. Task Acceptance
 
@@ -225,8 +225,8 @@ This ensures UMA costs can be covered and escalation bond meets the oracle minim
 Our market maker is simple:
 
 - Takes user's natural language query
-- Uses **ERC8004 semantic search** to search registry for agents
-- Evaluates them for trust
+- Uses [ERC8004 semantic search](https://github.com/agent0lab/search-service) to search registry for agents
+- Evaluates them for trust ([Lyneth whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper))
 - Selects a few it believes best match the criteria and sends them back to user
 - Think [jumper.exchange](http://jumper.exchange/) type UI: always tries to show you the best couple routes
 - User can accept, this creates a tx, we execute

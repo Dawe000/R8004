@@ -1,13 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
-import { formatEther } from 'ethers';
-import { useAccount, useReadContract } from 'wagmi';
+import { formatUnits } from 'ethers';
+import { useAccount, useChainId } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
-import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
 import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
+import { getDisputeStatusMessage, isTaskTerminal } from '@/lib/disputeFlow';
+import { classifyRpcError } from '@/lib/rpcErrors';
 import { getTaskDispatchMeta } from '@/lib/taskMeta';
+import { COSTON2_FIRELIGHT_DEFAULTS, PLASMA_TESTNET_DEFAULTS } from '@sdk/index';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +21,9 @@ import {
 import { Task, TaskStatus } from '@sdk/types';
 import { RefreshCw, CheckCircle2, Clock, AlertCircle, ExternalLink, Info } from 'lucide-react';
 import { toast } from 'sonner';
+
+const BASE_POLL_INTERVAL_MS = 60000;
+const MAX_POLL_INTERVAL_MS = 600000;
 
 const STATUS_MAP: Record<number, { label: string; color: string; icon: ComponentType<{ className?: string }> }> = {
   [TaskStatus.Created]: { label: 'Created', color: 'text-blue-400', icon: Clock },
@@ -53,64 +58,172 @@ function DataRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function TaskActivity({ taskId }: { taskId: string }) {
+function displayEvidenceValue(value?: string): string {
+  const trimmed = (value || '').trim();
+  return trimmed ? trimmed : 'Not provided';
+}
+
+function displayAssertionId(value?: string): string {
+  const assertionId = String(value || '');
+  if (
+    !assertionId
+    || assertionId === '0x'
+    || assertionId === '0x0000000000000000000000000000000000000000000000000000000000000000'
+  ) {
+    return 'Not escalated yet';
+  }
+  return assertionId;
+}
+
+function getAddressExplorerUrl(address: string, chainId: number): string | null {
+  if (chainId === PLASMA_TESTNET_DEFAULTS.chainId) {
+    return `https://testnet.plasmascan.to/address/${address}`;
+  }
+  if (chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId) {
+    return `https://coston2-explorer.flare.network/address/${address}`;
+  }
+  return null;
+}
+
+export function TaskActivity({
+  taskId,
+  initialTask = null,
+  agentResponseWindowSec,
+  disputeBondBps,
+  escrowTimingLoading,
+}: {
+  taskId: string;
+  initialTask?: Task | null;
+  agentResponseWindowSec: bigint | null;
+  disputeBondBps: bigint | null;
+  escrowTimingLoading: boolean;
+}) {
   const sdk = useAgentSDK();
   const { address } = useAccount();
-  const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
+  const chainId = useChainId();
 
-  const [task, setTask] = useState<Task | null>(null);
+  const [task, setTask] = useState<Task | null>(initialTask);
   const [paymentDeposited, setPaymentDeposited] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialTask);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
   const [resultBody, setResultBody] = useState<unknown>(null);
   const [resultError, setResultError] = useState<string | null>(null);
+  const [readWarning, setReadWarning] = useState<string | null>(null);
+  const [pollBackoffMs, setPollBackoffMs] = useState<number>(BASE_POLL_INTERVAL_MS);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const isTerminal = task ? isTaskTerminal(task) : false;
 
-  const { data: paymentTokenSymbolData } = useReadContract({
-    address: task?.paymentToken as `0x${string}` | undefined,
-    abi: [
-      {
-        name: 'symbol',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [],
-        outputs: [{ name: '', type: 'string' }],
-      },
-    ],
-    functionName: 'symbol',
-    query: {
-      enabled: Boolean(task?.paymentToken),
-    },
-  });
-
-  const fetchTask = useCallback(async () => {
-    if (!sdk) return;
-    try {
-      const id = BigInt(taskId);
-      const [data, deposited] = await Promise.all([
-        sdk.client.getTask(id),
-        sdk.client.getPaymentDeposited(id),
-      ]);
-      setTask(data);
+  const fetchTask = useCallback(async ({ includePayment = false }: { includePayment?: boolean } = {}) => {
+    if (!sdk) return null;
+    const id = BigInt(taskId);
+    const [data, deposited] = await Promise.all([
+      sdk.client.getTask(id),
+      includePayment ? sdk.client.getPaymentDeposited(id) : Promise.resolve(null),
+    ]);
+    setTask(data);
+    if (includePayment && deposited !== null) {
       setPaymentDeposited(Boolean(deposited));
-    } catch (error) {
-      console.error('Failed to fetch task status:', error);
-    } finally {
-      setLoading(false);
     }
+    setLastRefreshedAt(new Date().toISOString());
+    return data;
   }, [sdk, taskId]);
 
   useEffect(() => {
-    if (!sdk) return;
+    if (initialTask) {
+      setTask(initialTask);
+      setLoading(false);
+    }
+  }, [initialTask]);
 
-    void fetchTask();
-    const intervalId = setInterval(() => {
-      void fetchTask();
-    }, detailsOpen ? 5000 : 10000);
+  useEffect(() => {
+    if (!sdk || initialTask) return;
 
-    return () => clearInterval(intervalId);
-  }, [sdk, fetchTask, detailsOpen]);
+    let cancelled = false;
+    setLoading(true);
+    void fetchTask({ includePayment: false })
+      .then(() => {
+        if (!cancelled) {
+          setReadWarning(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const classified = classifyRpcError(error);
+        setReadWarning(classified.message);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sdk, fetchTask, initialTask]);
+
+  useEffect(() => {
+    if (!sdk || !detailsOpen) return;
+
+    void fetchTask({ includePayment: true })
+      .then(() => {
+        setReadWarning(null);
+      })
+      .catch((error: unknown) => {
+        const classified = classifyRpcError(error);
+        setReadWarning(classified.message);
+      });
+  }, [sdk, detailsOpen, fetchTask]);
+
+  useEffect(() => {
+    if (!sdk || !detailsOpen || isTerminal) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let delayMs = BASE_POLL_INTERVAL_MS;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const latestTask = await fetchTask({ includePayment: true });
+        if (cancelled) return;
+        setReadWarning(null);
+        delayMs = BASE_POLL_INTERVAL_MS;
+        setPollBackoffMs(delayMs);
+        if (latestTask && isTaskTerminal(latestTask)) {
+          return;
+        }
+      } catch (error: unknown) {
+        if (cancelled) return;
+        const classified = classifyRpcError(error);
+        if (classified.kind === 'rate_limited') {
+          delayMs = Math.min(MAX_POLL_INTERVAL_MS, Math.max(BASE_POLL_INTERVAL_MS, delayMs * 2));
+          setReadWarning(classified.message);
+        } else {
+          delayMs = BASE_POLL_INTERVAL_MS;
+          setReadWarning(`Read refresh failed: ${classified.message}`);
+        }
+        setPollBackoffMs(delayMs);
+      }
+
+      if (!cancelled) {
+        timeoutId = setTimeout(() => {
+          void poll();
+        }, delayMs);
+      }
+    };
+
+    timeoutId = setTimeout(() => {
+      void poll();
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [sdk, detailsOpen, fetchTask, isTerminal]);
 
   useEffect(() => {
     if (!task?.resultURI) {
@@ -166,7 +279,18 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
   const status = Number(task.status);
   const statusInfo = STATUS_MAP[status] || { label: 'Pending', color: 'text-gray-400', icon: Clock };
-  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
+  const disputeStatusMessage = getDisputeStatusMessage(
+    task,
+    BigInt(Math.floor(Date.now() / 1000)),
+    agentResponseWindowSec ?? 0n
+  );
+  const paymentTokenSymbol = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId
+    ? 'C2FLR'
+    : chainId === PLASMA_TESTNET_DEFAULTS.chainId
+      ? 'TST'
+      : 'TOKEN';
+  const paymentTokenDecimals = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId ? 6 : 18;
+  const explorerUrl = getAddressExplorerUrl(task.client, chainId);
   const StatusIcon = statusInfo.icon;
   const normalizedAddress = address?.toLowerCase();
   const isTaskClient = Boolean(normalizedAddress && normalizedAddress === task.client.toLowerCase());
@@ -195,7 +319,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
         : 'Deposit payment before notifying the agent.';
 
   const handleNotifyPaymentDeposited = async () => {
-    const dispatchMeta = getTaskDispatchMeta(task.id.toString());
+    const dispatchMeta = getTaskDispatchMeta(chainId, task.id.toString());
     if (!dispatchMeta?.agentId) {
       toast.warning('Payment deposited, but agent notification unavailable for this historical task.');
       return;
@@ -206,6 +330,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     try {
       await notifyErc8001PaymentDepositedDirect({
         agentId: dispatchMeta.agentId,
+        chainId,
         onchainTaskId: task.id.toString(),
       });
       toast.success('Agent notified. Task execution can resume.', { id: notifyToastId });
@@ -229,7 +354,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     try {
       await sdk.client.depositPayment(task.id);
       toast.success('Payment deposited on-chain.', { id: toastId });
-      await fetchTask();
+      await fetchTask({ includePayment: true });
       await handleNotifyPaymentDeposited();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -258,7 +383,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
       <div className="flex items-center gap-2">
         <div className="text-right">
-          <div className="text-[10px] font-black text-white">{formatEther(task.paymentAmount)} {paymentTokenSymbol}</div>
+          <div className="text-[10px] font-black text-white">{formatUnits(task.paymentAmount, paymentTokenDecimals)} {paymentTokenSymbol}</div>
         </div>
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -281,19 +406,16 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               <DataRow label="Client" value={task.client} />
               <DataRow label="Agent" value={task.agent} />
               <DataRow label="Payment Token" value={task.paymentToken} />
-              <DataRow label="Payment Amount" value={`${formatEther(task.paymentAmount)} ${paymentTokenSymbol}`} />
-              <DataRow label="Agent Stake" value={`${formatEther(task.agentStake)} ${paymentTokenSymbol}`} />
+              <DataRow label="Payment Amount" value={`${formatUnits(task.paymentAmount, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Stake" value={`${formatUnits(task.agentStake, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
               <DataRow label="Payment Deposited" value={paymentDeposited === null ? '-' : paymentDeposited ? 'Yes' : 'No'} />
               <DataRow label="Created At" value={formatTimestamp(task.createdAt)} />
               <DataRow label="Deadline" value={formatTimestamp(task.deadline)} />
               <DataRow label="Cooldown Ends" value={formatTimestamp(task.cooldownEndsAt)} />
-              <DataRow label="Client Dispute Bond" value={`${formatEther(task.clientDisputeBond)} ${paymentTokenSymbol}`} />
-              <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} ${paymentTokenSymbol}`} />
+              <DataRow label="Client Dispute Bond" value={`${formatUnits(task.clientDisputeBond, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
+              <DataRow label="Agent Escalation Bond" value={`${formatUnits(task.agentEscalationBond, paymentTokenDecimals)} ${paymentTokenSymbol}`} />
               <DataRow label="Result Hash" value={task.resultHash} />
               <DataRow label="Result URI" value={task.resultURI || '-'} />
-              <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
-              <DataRow label="Agent Evidence URI" value={task.agentEvidenceURI || '-'} />
-              <DataRow label="UMA Assertion ID" value={task.umaAssertionId || '-'} />
             </div>
 
             <div className="space-y-2 rounded-xl border border-emerald-400/30 bg-emerald-950/20 p-3">
@@ -320,6 +442,25 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               )}
             </div>
 
+            <div className="space-y-2 rounded-xl border border-orange-400/20 bg-orange-950/10 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-orange-300">Dispute Lifecycle</p>
+              <p className="text-[10px] text-orange-200/80">{disputeStatusMessage}</p>
+              <DataRow label="Client Evidence URI" value={displayEvidenceValue(task.clientEvidenceURI)} />
+              <DataRow label="Agent Evidence URI" value={displayEvidenceValue(task.agentEvidenceURI)} />
+              <DataRow label="UMA Assertion ID" value={displayAssertionId(task.umaAssertionId)} />
+              <DataRow label="UMA Result Truth" value={task.umaResultTruth ? 'true' : 'false'} />
+            </div>
+
+            <div className="space-y-1 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-[10px] text-slate-300">
+                Last refreshed: <span className="font-mono">{lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString() : '-'}</span>
+              </p>
+              <p className="text-[10px] text-slate-300">
+                Poll interval: <span className="font-mono">{detailsOpen && !isTaskTerminal(task) ? `${Math.round(pollBackoffMs / 1000)}s` : 'inactive'}</span>
+              </p>
+              {readWarning && <p className="text-[10px] text-yellow-300">{readWarning}</p>}
+            </div>
+
             {(resultBody !== null || resultError) && (
               <div className="space-y-2 rounded-xl border border-cyan-400/20 bg-cyan-950/10 p-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Result Payload</p>
@@ -338,19 +479,24 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               connectedAddress={address}
               agentResponseWindowSec={agentResponseWindowSec}
               disputeBondBps={disputeBondBps}
-              onTaskUpdated={fetchTask}
+              escrowTimingLoading={escrowTimingLoading}
+              onTaskUpdated={async () => {
+                await fetchTask({ includePayment: true });
+              }}
             />
           </DialogContent>
         </Dialog>
 
-        <a
-          href={`https://testnet.plasmascan.to/address/${task.client}`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <ExternalLink className="h-3 w-3" />
-        </a>
+        {explorerUrl && (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
       </div>
     </div>
   );

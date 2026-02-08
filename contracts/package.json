@@ -18,8 +18,17 @@
     "testnet:flow:path-b-uma-client": "FLOW_PATH=path-b-uma-client hardhat run script/plasma/run-testnet-flow.ts",
     "testnet:flow:path-b-uma-escalate": "FLOW_PATH=path-b-uma-escalate hardhat run script/plasma/run-testnet-flow.ts --network plasma-testnet",
     "testnet:flow:path-d": "FLOW_PATH=path-d hardhat run script/plasma/run-testnet-flow.ts",
+    "testnet:flow:coston2": "FLOW_PATH=path-a hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-a": "FLOW_PATH=path-a hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-b-concede": "FLOW_PATH=path-b-concede hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-b-uma-escalate": "FLOW_PATH=path-b-uma-escalate hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-b-uma-agent": "FLOW_PATH=path-b-uma-agent hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-b-uma-client": "FLOW_PATH=path-b-uma-client hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-c": "FLOW_PATH=path-c hardhat run script/flare/run-coston2-flow.ts --network coston2",
+    "testnet:flow:coston2:path-d": "FLOW_PATH=path-d hardhat run script/flare/run-coston2-flow.ts --network coston2",
     "testnet:mint": "hardhat run script/plasma/mint-testnet-tokens.ts --network plasma-testnet",
-    "check:disputes": "hardhat run script/check-disputes.ts --network plasma-testnet"
+    "check:disputes": "hardhat run script/check-disputes.ts --network plasma-testnet",
+    "check:disputes:flare": "CHECK_DISPUTES_NETWORK=flare hardhat run script/check-disputes.ts --network coston2"
   },
   "devDependencies": {
     "@erc8001/agent-task-sdk": "file:../sdk",

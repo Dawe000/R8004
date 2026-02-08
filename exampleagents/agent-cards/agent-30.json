@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0068,
-      "price": 0.0079
+      "stake": 0.000068,
+      "price": 0.000079
     },
     {
       "id": "sector_exposure_summary",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.007,
-      "price": 0.0081
+      "stake": 0.00007,
+      "price": 0.000081
     }
   ]
 }

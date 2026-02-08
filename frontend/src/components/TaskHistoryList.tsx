@@ -5,6 +5,8 @@ import { TaskActivity } from './TaskActivity';
 import { History, Loader2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
+import { useEscrowTiming } from '@/hooks/useEscrowTiming';
+import type { Task } from '@sdk/types';
 
 function loadTaskIdsFromStorage(): string[] {
   if (typeof window === 'undefined') return [];
@@ -15,10 +17,26 @@ function loadTaskIdsFromStorage(): string[] {
     .filter((value) => /^\d+$/.test(value));
 }
 
+function sortTaskIdsDesc(taskIds: string[]): string[] {
+  return [...taskIds].sort((a, b) => {
+    const left = BigInt(a);
+    const right = BigInt(b);
+    if (left === right) return 0;
+    return left > right ? -1 : 1;
+  });
+}
+
+function mergeUniqueTaskIds(taskIds: string[]): string[] {
+  const unique = new Set(taskIds.filter((value) => /^\d+$/.test(value)));
+  return sortTaskIdsDesc(Array.from(unique));
+}
+
 export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
   const { address } = useAccount();
   const sdk = useAgentSDK();
+  const { agentResponseWindowSec, disputeBondBps, isLoading: escrowTimingLoading } = useEscrowTiming();
   const [taskIds, setTaskIds] = useState<string[]>([]);
+  const [taskSnapshots, setTaskSnapshots] = useState<Record<string, Task>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -26,11 +44,24 @@ export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
       if (!allTime) return;
       setLoading(true);
       try {
-        // Use localStorage for task history (works for both quick view and full history)
         const saved = loadTaskIdsFromStorage();
-        setTaskIds([...saved].reverse());
+        if (sdk && address) {
+          const onChainTasks = await sdk.client.getMyTasks(false);
+          const onChainIds = onChainTasks.map((task) => task.id.toString());
+          const snapshots = Object.fromEntries(
+            onChainTasks.map((task) => [task.id.toString(), task])
+          ) as Record<string, Task>;
+          setTaskSnapshots(snapshots);
+          setTaskIds(mergeUniqueTaskIds([...saved, ...onChainIds]));
+        } else {
+          setTaskSnapshots({});
+          setTaskIds(mergeUniqueTaskIds(saved));
+        }
       } catch (err) {
         console.error('Failed to fetch task history:', err);
+        const saved = loadTaskIdsFromStorage();
+        setTaskSnapshots({});
+        setTaskIds(mergeUniqueTaskIds(saved));
       } finally {
         setLoading(false);
       }
@@ -39,10 +70,11 @@ export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
     if (allTime) {
       fetchOnChainHistory();
     } else {
+      setTaskSnapshots({});
       // Local storage fallback for the quick dashboard view
       const updateTasks = () => {
         const saved = loadTaskIdsFromStorage();
-        setTaskIds([...saved].reverse().slice(0, 5));
+        setTaskIds(sortTaskIdsDesc(saved).slice(0, 5));
       };
       updateTasks();
       const interval = setInterval(updateTasks, 5000);
@@ -78,7 +110,14 @@ export function TaskHistoryList({ allTime = false }: { allTime?: boolean }) {
       )}
       <div className={`space-y-2 ${allTime ? '' : 'max-h-[240px] overflow-y-auto custom-scrollbar pr-1'}`}>
         {taskIds.map((id) => (
-          <TaskActivity key={id} taskId={id} />
+          <TaskActivity
+            key={id}
+            taskId={id}
+            initialTask={taskSnapshots[id] ?? null}
+            agentResponseWindowSec={agentResponseWindowSec}
+            disputeBondBps={disputeBondBps}
+            escrowTimingLoading={escrowTimingLoading}
+          />
         ))}
       </div>
     </div>

@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0042,
-      "price": 0.0066
+      "stake": 0.000042,
+      "price": 0.000066
     },
     {
       "id": "qualification_checklist",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0044,
-      "price": 0.0068
+      "stake": 0.000044,
+      "price": 0.000068
     }
   ]
 }

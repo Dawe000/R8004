@@ -114,7 +114,9 @@ export function getDisputeEligibility(
   task: Task,
   nowSec: bigint | number,
   connectedAddress?: string | null,
-  evidenceUri?: string | null
+  evidenceUri?: string | null,
+  /** If set and non-empty, evidence will be uploaded to IPFS when disputing (no need for a pre-existing URI). */
+  evidenceText?: string | null
 ): ContestationEligibility {
   if (!sameAddress(task.client, connectedAddress)) {
     return {
@@ -138,11 +140,15 @@ export function getDisputeEligibility(
     };
   }
 
-  const trimmedEvidenceUri = evidenceUri?.trim() ?? '';
-  if (!trimmedEvidenceUri || !isLikelyUri(trimmedEvidenceUri)) {
+  const trimmedUri = evidenceUri?.trim() ?? '';
+  const trimmedText = evidenceText?.trim() ?? '';
+  const hasValidUri = trimmedUri !== '' && isLikelyUri(trimmedUri);
+  const hasEvidenceText = trimmedText !== '';
+
+  if (!hasValidUri && !hasEvidenceText) {
     return {
       enabled: false,
-      reason: 'Provide a valid evidence URI (ipfs://, https://, http://, ar://) before disputing.',
+      reason: 'Enter your evidence (reason for dispute). It will be uploaded to IPFS, or paste an existing ipfs:// / https:// URI.',
     };
   }
 
@@ -156,7 +162,8 @@ export function getSettleEligibility(
   task: Task,
   nowSec: bigint | number,
   agentResponseWindowSec: bigint | number | null,
-  connectedAddress?: string | null
+  connectedAddress?: string | null,
+  escrowTimingLoading = true
 ): ContestationEligibility {
   if (!sameAddress(task.client, connectedAddress)) {
     return {
@@ -168,7 +175,9 @@ export function getSettleEligibility(
   if (agentResponseWindowSec === null) {
     return {
       enabled: false,
-      reason: 'Loading escrow timing...',
+      reason: escrowTimingLoading
+        ? 'Loading escrow timing...'
+        : 'Escrow timing unavailable. Check RPC connectivity and refresh.',
     };
   }
 

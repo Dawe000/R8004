@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.004,
-      "price": 0.0065
+      "stake": 0.00004,
+      "price": 0.000065
     },
     {
       "id": "unlock_schedule_risk",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0042,
-      "price": 0.0067
+      "stake": 0.000042,
+      "price": 0.000067
     }
   ]
 }

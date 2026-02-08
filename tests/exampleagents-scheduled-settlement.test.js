@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import workerModule, {
   runScheduledCron,
   runDisputeEscalationForTask,
+  runScheduledSettlements,
   runScheduledSettlementsWithSdk,
 } from '../exampleagents/example-agents-worker.js';
 import { calculateResultHash } from '../sdk/src/crypto.ts';
@@ -266,6 +267,54 @@ describe('exampleagents settlement helper', () => {
     assert.equal(summary.failedTasks[0].taskId, '31');
     assert.equal(summary.failedTasks[0].action, 'escalateToUMA');
     assert.equal(summary.failedTasks[0].code, 'hash_mismatch');
+  });
+});
+
+describe('exampleagents multi-chain settlement aggregation', () => {
+  it('aggregates per-chain summaries and isolates per-chain failures', async () => {
+    const summary = await runScheduledSettlements(
+      {},
+      {
+        chainIds: [9746, 114],
+        async getErc8001SdkFn(_env, chainId) {
+          if (chainId === 114) {
+            throw new Error('flare signer unavailable');
+          }
+          return {
+            sdk: { name: 'sdk-9746' },
+            address: '0x0000000000000000000000000000000000000002',
+            provider: { name: 'provider-9746' },
+          };
+        },
+        async runScheduledSettlementsWithSdkFn({ chainId }) {
+          assert.equal(chainId, 9746);
+          return {
+            checked: 3,
+            eligible: 2,
+            settleEligible: 2,
+            escalateEligible: 0,
+            settled: 2,
+            escalated: 0,
+            failed: 0,
+            skipped: 1,
+            failedTasks: [],
+          };
+        },
+      }
+    );
+
+    assert.equal(summary.checked, 3);
+    assert.equal(summary.eligible, 2);
+    assert.equal(summary.settleEligible, 2);
+    assert.equal(summary.escalateEligible, 0);
+    assert.equal(summary.settled, 2);
+    assert.equal(summary.escalated, 0);
+    assert.equal(summary.failed, 1);
+    assert.equal(summary.skipped, 1);
+    assert.equal(summary.failedTasks.length, 1);
+    assert.equal(summary.failedTasks[0].chainId, 114);
+    assert.equal(summary.byChain['9746'].checked, 3);
+    assert.equal(summary.byChain['114'].error, 'flare signer unavailable');
   });
 });
 

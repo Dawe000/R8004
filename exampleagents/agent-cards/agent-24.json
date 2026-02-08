@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0056,
-      "price": 0.0073
+      "stake": 0.000056,
+      "price": 0.000073
     },
     {
       "id": "fx_move_explainer",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0058,
-      "price": 0.0075
+      "stake": 0.000058,
+      "price": 0.000075
     }
   ]
 }

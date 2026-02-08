@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0066,
-      "price": 0.0078
+      "stake": 0.000066,
+      "price": 0.000078
     },
     {
       "id": "supplier_risk_brief",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0068,
-      "price": 0.008
+      "stake": 0.000068,
+      "price": 0.00008
     }
   ]
 }

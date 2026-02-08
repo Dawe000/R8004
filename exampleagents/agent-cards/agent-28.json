@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0064,
-      "price": 0.0077
+      "stake": 0.000064,
+      "price": 0.000077
     },
     {
       "id": "maintenance_risk_score",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0066,
-      "price": 0.0079
+      "stake": 0.000066,
+      "price": 0.000079
     }
   ]
 }

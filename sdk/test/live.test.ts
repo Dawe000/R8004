@@ -3,12 +3,17 @@
  *
  * Setup:
  * 1. Set SDK_LIVE_TESTNET=1 and MNEMONIC in env (or in .env)
- * 2. Ensure client/agent addresses are funded
+ * 2. Ensure client/agent addresses are funded (XPL for gas + USDT0 for payments/stake)
  *
  * Loads .env from sdk/ or ../contracts/ if present.
  * Skip unless SDK_LIVE_TESTNET=1 and MNEMONIC are set.
  * Optional: SDK_LIVE_RUN_FLOW=path-a,path-c,path-d to run flows (creates tasks, costs tokens).
  *   path-a | path-c | path-d | path-b-concede | path-b-uma-agent | path-b-uma-client
+ *
+ * Bonds (same token as task payment, i.e. USDT0 on Plasma):
+ * - Client dispute bond = 1% of paymentAmount (disputeBondBps).
+ * - Agent escalation bond = max(1% of paymentAmount, umaConfig.minimumBond). Testnet minimumBond = 1e18 (1 token, 18 decimals).
+ * Flow amounts are kept tiny (below a cent) to minimise cost.
  */
 import * as dotenv from "dotenv";
 import * as fs from "fs";
@@ -207,6 +212,10 @@ const AGENT_RESPONSE_WINDOW = 300;
 const PATH_B_CONCEDE_WAIT = COOLDOWN + AGENT_RESPONSE_WINDOW;
 const UMA_LIVENESS = 180;
 
+/** Tiny amounts for live flows (below a cent). 18 decimals: 0.001 and 0.0001. */
+const LIVE_PAYMENT_AMOUNT = 1n * 10n ** 15n;
+const LIVE_STAKE_AMOUNT = 1n * 10n ** 14n;
+
 function loadPlasmaDeployment(): {
   contracts?: { MockOOv3?: string };
   sdk?: { escrowAddress?: string; mockTokenAddress?: string; rpcUrl?: string; deploymentBlock?: number };
@@ -240,8 +249,8 @@ descFlow("path-a")("SDK live Path A flow (Plasma testnet)", () => {
     const agentSdk = new AgentSDK(config, agent);
 
     const tokenAddr = config.mockTokenAddress!;
-    const paymentAmount = ethers.parseEther("100");
-    const stakeAmount = ethers.parseEther("10");
+    const paymentAmount = LIVE_PAYMENT_AMOUNT;
+    const stakeAmount = LIVE_STAKE_AMOUNT;
     const deadline = Math.floor(Date.now() / 1000) + 86400;
 
     const taskId = await clientSdk.createTask(
@@ -278,8 +287,8 @@ descFlow("path-a")("SDK live Path A flow (Plasma testnet)", () => {
       const clientSdk = new ClientSDK(cfg, c);
       const agentSdk = new AgentSDK(cfg, a);
       const tokenAddr = cfg.mockTokenAddress!;
-      const paymentAmount = ethers.parseEther("100");
-      const stakeAmount = ethers.parseEther("10");
+      const paymentAmount = LIVE_PAYMENT_AMOUNT;
+      const stakeAmount = LIVE_STAKE_AMOUNT;
       const deadline = Math.floor(Date.now() / 1000) + 86400;
 
       const taskId = await clientSdk.createTask(
@@ -315,8 +324,8 @@ descFlow("path-c")("SDK live Path C flow (Plasma testnet)", () => {
     const agentSdk = new AgentSDK(config, agent);
 
     const tokenAddr = config.mockTokenAddress!;
-    const paymentAmount = ethers.parseEther("100");
-    const stakeAmount = ethers.parseEther("10");
+    const paymentAmount = LIVE_PAYMENT_AMOUNT;
+    const stakeAmount = LIVE_STAKE_AMOUNT;
     const deadline = Math.floor(Date.now() / 1000) - 60;
 
     const taskId = await clientSdk.createTask(
@@ -350,8 +359,8 @@ descFlow("path-d")("SDK live Path D flow (Plasma testnet)", () => {
     const agentSdk = new AgentSDK(config, agent);
 
     const tokenAddr = config.mockTokenAddress!;
-    const paymentAmount = ethers.parseEther("100");
-    const stakeAmount = ethers.parseEther("10");
+    const paymentAmount = LIVE_PAYMENT_AMOUNT;
+    const stakeAmount = LIVE_STAKE_AMOUNT;
     const deadline = Math.floor(Date.now() / 1000) + 86400;
 
     const taskId = await clientSdk.createTask(
@@ -388,8 +397,8 @@ descFlow("path-b-concede")("SDK live Path B concede flow (Plasma testnet)", () =
     const agentSdk = new AgentSDK(config, agent);
 
     const tokenAddr = config.mockTokenAddress!;
-    const paymentAmount = ethers.parseEther("100");
-    const stakeAmount = ethers.parseEther("10");
+    const paymentAmount = LIVE_PAYMENT_AMOUNT;
+    const stakeAmount = LIVE_STAKE_AMOUNT;
     const deadline = Math.floor(Date.now() / 1000) + 86400;
 
     const taskId = await clientSdk.createTask(
@@ -406,7 +415,7 @@ descFlow("path-b-concede")("SDK live Path B concede flow (Plasma testnet)", () =
 
     await new Promise((r) => setTimeout(r, (PATH_B_CONCEDE_WAIT + 5) * 1000));
 
-    const disputeBond = (paymentAmount * 100n) / 10000n;
+    const disputeBond = (paymentAmount * 100n) / 10000n; // 1% = disputeBondBps
     const token = new ethers.Contract(
       tokenAddr,
       ["function balanceOf(address) view returns (uint256)"],
@@ -444,8 +453,8 @@ async function runPathBUMA(agentWins: boolean): Promise<void> {
   const agentSdk = new AgentSDK(config, agent);
 
   const tokenAddr = config.mockTokenAddress!;
-  const paymentAmount = ethers.parseEther("100");
-  const stakeAmount = ethers.parseEther("10");
+  const paymentAmount = LIVE_PAYMENT_AMOUNT;
+  const stakeAmount = LIVE_STAKE_AMOUNT;
   const deadline = Math.floor(Date.now() / 1000) + 86400;
 
   const taskId = await clientSdk.createTask(

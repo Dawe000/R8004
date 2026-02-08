@@ -13,7 +13,6 @@ export function AgentRoutesList({
   selectedId: string | null,
   onSelect: (id: string) => void
 }) {
-  // Show only top 3 agents
   const topAgents = agents.slice(0, 3);
 
   return (

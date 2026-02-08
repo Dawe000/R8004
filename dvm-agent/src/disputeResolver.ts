@@ -32,6 +32,10 @@ export interface DvmEnv {
   ESCROW_ADDRESS: string;
   MOCK_OOv3_ADDRESS: string;
   DEPLOYMENT_BLOCK?: number;
+  /** Seconds per block for liveness (default 2, e.g. Plasma; Flare/Coston2 similar). */
+  BLOCK_TIME_SEC?: number;
+  /** Max blocks per eth_getLogs request (e.g. 30 for Flare Coston2). Omit for Plasma/default. */
+  MAX_LOG_BLOCK_RANGE?: number;
   /** Override IPFS gateway (default: Cloudflare, or Pinata when PINATA_JWT set). */
   IPFS_GATEWAY?: string;
   /** When set, use Pinata gateway (more reliable for content pinned via Pinata). */
@@ -58,15 +62,19 @@ export async function resolvePendingDisputes(
   const deploymentBlock = env.DEPLOYMENT_BLOCK ?? Number(PLASMA_TESTNET_DEFAULTS.deploymentBlock);
 
   const currentBlock = await provider.getBlockNumber();
-  const lastChecked = await dvmState.getLastCheckedBlock();
+  const lastChecked = await dvmState.getLastCheckedBlock(escrowAddress);
   const fromBlock = lastChecked ?? deploymentBlock;
+
+  const blockTimeSec = env.BLOCK_TIME_SEC ?? PLASMA_BLOCK_TIME_SEC;
 
   const [escrowConfig, escalated] = await Promise.all([
     getEscrowConfig(escrowAddress, provider),
-    getEscalatedDisputes(escrowAddress, provider, fromBlock, currentBlock),
+    getEscalatedDisputes(escrowAddress, provider, fromBlock, currentBlock, {
+      maxBlockRange: env.MAX_LOG_BLOCK_RANGE,
+    }),
   ]);
 
-  console.log("[DVM] blocks", fromBlock, "→", currentBlock, "| disputes:", escalated.length);
+  console.log("[DVM]", escrowAddress.slice(0, 10) + "...", "blocks", fromBlock, "→", currentBlock, "| disputes:", escalated.length);
 
   const ipfsGateway =
     env.IPFS_GATEWAY ??
@@ -76,7 +84,7 @@ export async function resolvePendingDisputes(
   const venice = new VeniceDisputeService(env.VENICE_API_KEY);
 
   const results: ResolveResult[] = [];
-  const livenessBlocks = Number(escrowConfig.umaConfig.liveness) / PLASMA_BLOCK_TIME_SEC;
+  const livenessBlocks = Number(escrowConfig.umaConfig.liveness) / blockTimeSec;
 
   for (const dispute of escalated) {
     const { taskId, assertionId, blockNumber: escalationBlock } = dispute;
@@ -205,7 +213,7 @@ export async function resolvePendingDisputes(
       r.skipped === "no assertionId"
   );
   if (allTerminal) {
-    await dvmState.setLastCheckedBlock(currentBlock);
+    await dvmState.setLastCheckedBlock(escrowAddress, currentBlock);
   } else {
     console.log("[DVM] not advancing lastCheckedBlock – some disputes need retry");
   }

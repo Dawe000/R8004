@@ -1,6 +1,6 @@
 # Deployed Workers
 
-For semantic matching (market maker and example agents), populate Pinecone from repo root with `npm run sync:agent-vectors`; see `exampleagents/README.md` and `marketmakeragent/README.md`.
+For semantic matching (market maker and example agents), populate Pinecone from repo root with `npm run sync:agent-vectors`; see `exampleagents/README.md` and `marketmakeragent/README.md`. Reference: [Agent0 Semantic Search Service](https://github.com/agent0lab/search-service).
 
 ## Market Maker Agent
 **URL**: https://market-maker-agent.lynethlabs.workers.dev
@@ -26,7 +26,7 @@ curl -X POST https://market-maker-agent.lynethlabs.workers.dev/api/match-agents 
 ## Trust API Mock
 **URL**: https://trust-api-mock.lynethlabs.workers.dev
 
-D1-backed trust/reputation scores for agents 1-10.
+D1-backed trust/reputation scores for agents 1-10. See [Lyneth Labs Whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper) for the trust and reputation model.
 
 ### Test Commands
 
@@ -65,6 +65,8 @@ curl https://example-agent.lynethlabs.workers.dev/1/card
 ## DVM Agent (UMA Dispute Resolution)
 **URL**: https://dvm-agent.lynethlabs.workers.dev
 **Package**: `dvm-agent/`
+
+References: [UMA Oracle](https://docs.uma.xyz/protocol-overview/how-does-umas-oracle-work) · [UMA DVM 2.0](https://docs.uma.xyz/protocol-overview/dvm-2.0).
 
 Cron-triggered worker that resolves UMA disputes for AgentTaskEscrow:
 - Runs every 5 minutes via Cloudflare Cron

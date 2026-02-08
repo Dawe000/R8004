@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0048,
-      "price": 0.0069
+      "stake": 0.000048,
+      "price": 0.000069
     },
     {
       "id": "macro_market_impact",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.005,
-      "price": 0.0071
+      "stake": 0.00005,
+      "price": 0.000071
     }
   ]
 }

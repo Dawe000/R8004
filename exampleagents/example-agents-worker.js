@@ -35,6 +35,10 @@ import agentCard33 from './agent-cards/agent-33.json' assert { type: 'json' };
 import agentCard34 from './agent-cards/agent-34.json' assert { type: 'json' };
 import agentCard35 from './agent-cards/agent-35.json' assert { type: 'json' };
 import { AgentSDK } from '../sdk/src/agent.ts';
+import {
+  COSTON2_FIRELIGHT_DEFAULTS,
+  PLASMA_TESTNET_DEFAULTS,
+} from '../sdk/src/config.ts';
 import { fetchTaskSpecFromOnchainUri } from '../sdk/src/taskSpec.ts';
 import { getAgentTaskAction } from '../sdk/src/tasks.ts';
 import { uploadFile } from '../sdk/src/ipfs.ts';
@@ -57,9 +61,26 @@ const MIN_SYNC_TIMEOUT_MS = 1000;
 const TASK_RETENTION_DAYS = 7;
 const CLEANUP_BATCH_SIZE = 200;
 const PENDING_TASK_LOOKUP_LIMIT = 500;
-const DEFAULT_ERC8001_CHAIN_ID = 9746;
-const DEFAULT_ERC8001_RPC_URL = 'https://testnet-rpc.plasma.to';
-const DEFAULT_ERC8001_ESCROW_ADDRESS = '0x2E24A0a838Fa71765A00CB9528B6C378D8437D53';
+const DEFAULT_ERC8001_CHAIN_ID = PLASMA_TESTNET_DEFAULTS.chainId;
+const SUPPORTED_ERC8001_CHAIN_IDS = [
+  PLASMA_TESTNET_DEFAULTS.chainId,
+  COSTON2_FIRELIGHT_DEFAULTS.chainId,
+];
+const SUPPORTED_ERC8001_CHAIN_ID_SET = new Set(SUPPORTED_ERC8001_CHAIN_IDS);
+const DEFAULT_ERC8001_CHAIN_CONFIG = {
+  [PLASMA_TESTNET_DEFAULTS.chainId]: {
+    chainId: PLASMA_TESTNET_DEFAULTS.chainId,
+    rpcUrl: PLASMA_TESTNET_DEFAULTS.rpcUrl,
+    escrowAddress: PLASMA_TESTNET_DEFAULTS.escrowAddress,
+    deploymentBlock: PLASMA_TESTNET_DEFAULTS.deploymentBlock,
+  },
+  [COSTON2_FIRELIGHT_DEFAULTS.chainId]: {
+    chainId: COSTON2_FIRELIGHT_DEFAULTS.chainId,
+    rpcUrl: COSTON2_FIRELIGHT_DEFAULTS.rpcUrl,
+    escrowAddress: COSTON2_FIRELIGHT_DEFAULTS.escrowAddress,
+    deploymentBlock: COSTON2_FIRELIGHT_DEFAULTS.deploymentBlock,
+  },
+};
 const SETTLEMENT_CRON = '*/5 * * * *';
 const CLEANUP_CRON = '0 */6 * * *';
 
@@ -457,6 +478,90 @@ function resolveAuctionBidAsk(defaultAsk, minAmount, marketState) {
   return String(boundedAsk);
 }
 
+function parseChainId(value, fallback = null) {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function isSupportedErc8001ChainId(chainId) {
+  return SUPPORTED_ERC8001_CHAIN_ID_SET.has(chainId);
+}
+
+function readChainScopedEnv(env, key, chainId) {
+  const scoped = env?.[`${key}_${chainId}`];
+  if (scoped !== undefined && scoped !== null && String(scoped).trim() !== '') {
+    return scoped;
+  }
+  return env?.[key];
+}
+
+function resolveDefaultErc8001ChainId(env) {
+  const chainId = parseChainId(env?.ERC8001_CHAIN_ID, DEFAULT_ERC8001_CHAIN_ID);
+  if (chainId !== null && isSupportedErc8001ChainId(chainId)) {
+    return chainId;
+  }
+  return DEFAULT_ERC8001_CHAIN_ID;
+}
+
+function resolveConfiguredErc8001ChainIds(env) {
+  const listRaw = String(env?.ERC8001_CHAIN_IDS || '').trim();
+  if (listRaw) {
+    const parsed = listRaw
+      .split(',')
+      .map((entry) => parseChainId(entry.trim(), null))
+      .filter((chainId) => chainId !== null && isSupportedErc8001ChainId(chainId));
+    if (parsed.length > 0) {
+      return Array.from(new Set(parsed));
+    }
+  }
+
+  const defaultChainId = resolveDefaultErc8001ChainId(env);
+  return Array.from(new Set([defaultChainId, ...SUPPORTED_ERC8001_CHAIN_IDS]));
+}
+
+function resolveErc8001ChainConfig(env, requestedChainId) {
+  const fallbackChainId = resolveDefaultErc8001ChainId(env);
+  const chainId = parseChainId(requestedChainId, fallbackChainId);
+  if (chainId === null || !isSupportedErc8001ChainId(chainId)) {
+    throw new Error(
+      `Unsupported ERC8001 chainId ${requestedChainId}. Supported: ${SUPPORTED_ERC8001_CHAIN_IDS.join(', ')}.`
+    );
+  }
+
+  const defaults = DEFAULT_ERC8001_CHAIN_CONFIG[chainId];
+  const rpcUrl = String(
+    readChainScopedEnv(env, 'ERC8001_RPC_URL', chainId) || defaults.rpcUrl
+  ).trim();
+  const escrowAddress = String(
+    readChainScopedEnv(env, 'ERC8001_ESCROW_ADDRESS', chainId) || defaults.escrowAddress
+  ).trim();
+  const deploymentBlockRaw =
+    readChainScopedEnv(env, 'ERC8001_DEPLOYMENT_BLOCK', chainId) ?? defaults.deploymentBlock;
+  const parsedDeploymentBlock = Number(deploymentBlockRaw);
+  const deploymentBlock = Number.isFinite(parsedDeploymentBlock)
+    ? parsedDeploymentBlock
+    : undefined;
+  const publicBaseUrl = readChainScopedEnv(env, 'ERC8001_PUBLIC_BASE_URL', chainId);
+  const privateKey = String(
+    readChainScopedEnv(env, 'AGENT_EVM_PRIVATE_KEY', chainId) || env?.AGENT_EVM_PRIVATE_KEY || ''
+  ).trim();
+
+  return {
+    chainId,
+    rpcUrl,
+    escrowAddress,
+    deploymentBlock,
+    publicBaseUrl: publicBaseUrl ? String(publicBaseUrl).trim() : '',
+    privateKey,
+  };
+}
+
 async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
   if (
     request.method === 'POST' &&
@@ -466,6 +571,7 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
     try {
       const body = await parseRequestBody(request);
       const onchainTaskId = body?.onchainTaskId ? String(body.onchainTaskId) : '';
+      const requestedChainId = parseChainId(body?.chainId, null);
       if (!onchainTaskId) {
         return jsonResponse(
           {
@@ -477,13 +583,58 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
         );
       }
 
-      const task = await findLatestTaskByOnchainTaskId(env, agent.id, onchainTaskId);
+      if (body?.chainId !== undefined && requestedChainId === null) {
+        return jsonResponse(
+          {
+            error: 'Invalid payload',
+            details: 'chainId must be a positive integer when provided.',
+          },
+          400,
+          corsHeaders
+        );
+      }
+
+      if (requestedChainId !== null && !isSupportedErc8001ChainId(requestedChainId)) {
+        return jsonResponse(
+          {
+            error: 'Unsupported chainId',
+            details: `Supported chains: ${SUPPORTED_ERC8001_CHAIN_IDS.join(', ')}`,
+            chainId: requestedChainId,
+          },
+          400,
+          corsHeaders
+        );
+      }
+
+      const match = await findLatestTaskByOnchainTaskId(
+        env,
+        agent.id,
+        onchainTaskId,
+        requestedChainId
+      );
+      const task = match.task;
+      const resolvedChainId = match.chainId;
+
       if (!task) {
+        if (match.ambiguous && requestedChainId === null) {
+          return jsonResponse(
+            {
+              error: 'Ambiguous onchainTaskId across chains',
+              details: 'Provide chainId in payment-deposited payload to disambiguate.',
+              onchainTaskId,
+              agentId: agent.id,
+              candidateChainIds: match.candidateChainIds,
+            },
+            409,
+            corsHeaders
+          );
+        }
         return jsonResponse(
           {
             error: 'No matching task run found',
             onchainTaskId,
             agentId: agent.id,
+            ...(requestedChainId !== null ? { chainId: requestedChainId } : {}),
           },
           404,
           corsHeaders
@@ -496,6 +647,7 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
             agentId: agent.id,
             onchainTaskId,
             taskId: task.id,
+            ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
             status: 'no-op',
             taskStatus: task.status,
           },
@@ -517,6 +669,7 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
             agentId: agent.id,
             onchainTaskId,
             taskId: task.id,
+            ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
             status: 'no-op',
             details: 'Task is not awaiting payment alert.',
             taskStatus: task.status,
@@ -526,7 +679,11 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
         );
       }
 
-      const deposited = await isPaymentDeposited(env, onchainTaskId);
+      const deposited = await isPaymentDeposited(
+        env,
+        onchainTaskId,
+        resolvedChainId ?? resolveDefaultErc8001ChainId(env)
+      );
       if (!deposited) {
         return jsonResponse(
           {
@@ -534,6 +691,7 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
             details: 'On-chain paymentDeposited is false for this task.',
             onchainTaskId,
             agentId: agent.id,
+            ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
           },
           409,
           corsHeaders
@@ -544,6 +702,7 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
         ...existingMeta,
         erc8001: {
           ...existingErc8001Meta,
+          ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
           awaitingPaymentAlert: false,
           resumeQueuedAt: nowIso(),
           lastResumeReason: 'payment-deposited-alert',
@@ -557,12 +716,14 @@ async function handleErc8001Routes(request, env, corsHeaders, agent, segments) {
         forceFailure: false,
         resumeReason: 'payment-deposited-alert',
         onchainTaskId,
+        ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
       });
 
       return jsonResponse(
         {
           agentId: agent.id,
           onchainTaskId,
+          ...(Number.isInteger(resolvedChainId) ? { chainId: resolvedChainId } : {}),
           taskId: task.id,
           status: 'queued',
         },
@@ -591,7 +752,10 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
   try {
     const body = await parseRequestBody(request);
     const input = extractInput(body);
-    const erc8001Request = parseErc8001Request(body);
+    const erc8001Request = parseErc8001Request(body, env);
+    const normalizedBody = erc8001Request
+      ? normalizeErc8001Body(body, erc8001Request)
+      : body;
 
     if (!input && !erc8001Request) {
       return jsonResponse({ error: 'No input provided for task.' }, 400, corsHeaders);
@@ -616,7 +780,7 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
       agentId: agent.id,
       channel: channel,
       status: TASK_STATUS.SUBMITTED,
-      requestPayloadJson: JSON.stringify(body ?? {}),
+      requestPayloadJson: JSON.stringify(normalizedBody ?? {}),
       inputText: input,
       skillId: skillId,
       modelRequested: modelRequested,
@@ -639,7 +803,13 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
 
     if (forceAsync) {
       await markTaskRunning(env, taskId);
-      await enqueueTaskExecution(env, { taskId: taskId, agentId: agent.id, channel: channel, forceFailure: forceFailure });
+      await enqueueTaskExecution(env, {
+        taskId: taskId,
+        agentId: agent.id,
+        channel: channel,
+        forceFailure: forceFailure,
+        ...(erc8001Request ? { chainId: erc8001Request.chainId } : {}),
+      });
       return jsonResponse(
         formatAsyncAcceptedResponse(taskId, channel, agent.id, now),
         202,
@@ -651,7 +821,7 @@ async function createTask(request, env, ctx, corsHeaders, agent, channel, url) {
 
     const execution = await runWithTimeout(
       (signal) =>
-        processAgentTask(agent, body, input, env, {
+        processAgentTask(agent, normalizedBody, input, env, {
           skillId: skillId,
           modelRequested: modelRequested,
           signal: signal,
@@ -1015,7 +1185,7 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
   const existingMeta = safeJsonParse(task.response_meta_json) || {};
 
   try {
-    const erc8001Request = parseErc8001Request(body);
+    const erc8001Request = parseErc8001Request(body, env);
     let erc8001Meta = null;
     let executionBody = body;
     let executionInputText = task.input_text;
@@ -1024,7 +1194,11 @@ async function processQueuedTaskMessage(rawMessageBody, env) {
 
     if (erc8001Request) {
       erc8001Meta = await acceptTaskIfNeeded(env, task, erc8001Request);
-      const deposited = await isPaymentDeposited(env, erc8001Request.taskId);
+      const deposited = await isPaymentDeposited(
+        env,
+        erc8001Request.taskId,
+        erc8001Request.chainId
+      );
       if (!deposited) {
         await updateTaskResponseMeta(env, task.id, {
           ...existingMeta,
@@ -1121,7 +1295,15 @@ async function enqueueTaskExecution(env, payload) {
   await env.TASK_EXEC_QUEUE.send(payload);
 }
 
-async function findLatestTaskByOnchainTaskId(env, agentId, onchainTaskId) {
+function safeParseErc8001Request(body, env, options = {}) {
+  try {
+    return parseErc8001Request(body, env, options);
+  } catch {
+    return null;
+  }
+}
+
+async function findLatestTaskByOnchainTaskId(env, agentId, onchainTaskId, chainId = null) {
   const db = requireDb(env);
   const rows = await db
     .prepare(
@@ -1136,18 +1318,75 @@ async function findLatestTaskByOnchainTaskId(env, agentId, onchainTaskId) {
     .all();
 
   const candidates = Array.isArray(rows?.results) ? rows.results : [];
+  const matches = [];
   for (const task of candidates) {
     const requestPayload = safeJsonParse(task.request_payload_json) || {};
-    const erc8001 = parseErc8001Request(requestPayload);
+    const responseMeta = safeJsonParse(task.response_meta_json) || {};
+    const responseChainId = parseChainId(responseMeta?.erc8001?.chainId, null);
+    const erc8001 = safeParseErc8001Request(requestPayload, env, {
+      defaultChainIfMissing: false,
+    });
     if (erc8001?.taskId === onchainTaskId) {
-      return task;
+      matches.push({
+        task,
+        chainId:
+          erc8001.chainId ??
+          (responseChainId !== null && isSupportedErc8001ChainId(responseChainId)
+            ? responseChainId
+            : null),
+      });
     }
   }
 
-  return null;
+  if (chainId !== null) {
+    const scopedMatch = matches.find((entry) => entry.chainId === chainId);
+    return {
+      task: scopedMatch?.task || null,
+      chainId: scopedMatch?.chainId ?? chainId,
+      ambiguous: false,
+      candidateChainIds: Array.from(
+        new Set(
+          matches
+            .map((entry) => entry.chainId)
+            .filter((value) => value !== null && value !== undefined)
+        )
+      ),
+    };
+  }
+
+  if (matches.length === 1) {
+    return {
+      task: matches[0].task,
+      chainId: matches[0].chainId,
+      ambiguous: false,
+      candidateChainIds: [matches[0].chainId],
+    };
+  }
+
+  if (matches.length > 1) {
+    return {
+      task: null,
+      chainId: null,
+      ambiguous: true,
+      candidateChainIds: Array.from(
+        new Set(
+          matches
+            .map((entry) => entry.chainId)
+            .filter((value) => value !== null && value !== undefined)
+        )
+      ),
+    };
+  }
+
+  return {
+    task: null,
+    chainId: null,
+    ambiguous: false,
+    candidateChainIds: [],
+  };
 }
 
-async function findLatestTaskByOnchainTaskIdAnyAgent(env, onchainTaskId) {
+async function findLatestTaskByOnchainTaskIdAnyAgent(env, onchainTaskId, chainId = null) {
   const db = requireDb(env);
   const rows = await db
     .prepare(
@@ -1161,28 +1400,90 @@ async function findLatestTaskByOnchainTaskIdAnyAgent(env, onchainTaskId) {
     .all();
 
   const candidates = Array.isArray(rows?.results) ? rows.results : [];
+  const matches = [];
   for (const task of candidates) {
     const requestPayload = safeJsonParse(task.request_payload_json) || {};
-    const erc8001 = parseErc8001Request(requestPayload);
+    const responseMeta = safeJsonParse(task.response_meta_json) || {};
+    const responseChainId = parseChainId(responseMeta?.erc8001?.chainId, null);
+    const erc8001 = safeParseErc8001Request(requestPayload, env, {
+      defaultChainIfMissing: false,
+    });
     if (erc8001?.taskId === onchainTaskId) {
-      return task;
+      matches.push({
+        task,
+        chainId:
+          erc8001.chainId ??
+          (responseChainId !== null && isSupportedErc8001ChainId(responseChainId)
+            ? responseChainId
+            : null),
+      });
     }
+  }
+
+  if (chainId !== null) {
+    const scopedMatch = matches.find((entry) => entry.chainId === chainId);
+    return scopedMatch?.task || null;
+  }
+
+  if (matches.length === 1) {
+    return matches[0].task;
   }
 
   return null;
 }
 
-function parseErc8001Request(body) {
+function parseErc8001Request(body, env, options = {}) {
   const taskId = body?.erc8001?.taskId;
   const stakeAmountWei = body?.erc8001?.stakeAmountWei;
   if (!taskId || !stakeAmountWei) {
     return null;
   }
+
+  const defaultChainIfMissing = options.defaultChainIfMissing !== false;
+  const parsedChainId = parseChainId(
+    body?.erc8001?.chainId,
+    defaultChainIfMissing ? resolveDefaultErc8001ChainId(env) : null
+  );
+  if (
+    parsedChainId !== null
+    && !isSupportedErc8001ChainId(parsedChainId)
+  ) {
+    throw new Error(
+      `Unsupported erc8001.chainId ${body?.erc8001?.chainId}. Supported: ${SUPPORTED_ERC8001_CHAIN_IDS.join(', ')}.`
+    );
+  }
+
   return {
+    chainId: parsedChainId,
     taskId: String(taskId),
     stakeAmountWei: String(stakeAmountWei),
     publicBaseUrl: body?.erc8001?.publicBaseUrl ? String(body.erc8001.publicBaseUrl) : undefined,
   };
+}
+
+function normalizeErc8001Body(body, erc8001Request) {
+  const baseBody = isPlainObject(body) ? body : {};
+  const baseErc8001 = isPlainObject(baseBody.erc8001) ? baseBody.erc8001 : {};
+  return {
+    ...baseBody,
+    erc8001: {
+      ...baseErc8001,
+      taskId: erc8001Request.taskId,
+      stakeAmountWei: erc8001Request.stakeAmountWei,
+      chainId: erc8001Request.chainId,
+      ...(erc8001Request.publicBaseUrl
+        ? { publicBaseUrl: erc8001Request.publicBaseUrl }
+        : {}),
+    },
+  };
+}
+
+function resolveTaskSpecLookbackBlocks(env) {
+  const parsed = Number(env?.ERC8001_TASK_SPEC_LOOKBACK_BLOCKS);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed);
+  }
+  return 300;
 }
 
 function mergeExecutionBodyFromSpec(body, parsedSpec) {
@@ -1201,68 +1502,132 @@ function mergeExecutionBodyFromSpec(body, parsedSpec) {
 }
 
 async function resolveErc8001ExecutionContext(env, erc8001Request) {
-  const { provider, escrowAddress, deploymentBlock } = await getErc8001Sdk(env);
+  const { provider, escrowAddress, deploymentBlock } = await getErc8001Sdk(
+    env,
+    erc8001Request.chainId
+  );
+  const latestBlock = await provider.getBlockNumber();
+  const lookbackBlocks = resolveTaskSpecLookbackBlocks(env);
+  const dynamicFromBlock = BigInt(Math.max(0, latestBlock - lookbackBlocks));
+  const configuredFromBlock =
+    deploymentBlock !== undefined ? BigInt(deploymentBlock) : 0n;
+  const fromBlock =
+    dynamicFromBlock > configuredFromBlock ? dynamicFromBlock : configuredFromBlock;
+
   return fetchTaskSpecFromOnchainUri(
     escrowAddress,
     provider,
     BigInt(erc8001Request.taskId),
-    { fromBlock: deploymentBlock }
+    { fromBlock: fromBlock }
   );
 }
 
-let erc8001SdkPromise = null;
+const erc8001SdkPromiseByChain = new Map();
 
-async function getErc8001Sdk(env) {
-  if (!erc8001SdkPromise) {
-    erc8001SdkPromise = (async () => {
-      if (!env.AGENT_EVM_PRIVATE_KEY) {
-        throw new Error('Missing AGENT_EVM_PRIVATE_KEY for ERC8001 agent transactions.');
-      }
+async function getErc8001Sdk(env, requestedChainId) {
+  const config = resolveErc8001ChainConfig(env, requestedChainId);
+  const chainId = config.chainId;
 
-      const rpcUrl = env.ERC8001_RPC_URL || DEFAULT_ERC8001_RPC_URL;
-      const chainId = Number(env.ERC8001_CHAIN_ID || DEFAULT_ERC8001_CHAIN_ID);
-      const escrowAddress = env.ERC8001_ESCROW_ADDRESS || DEFAULT_ERC8001_ESCROW_ADDRESS;
-      const parsedDeploymentBlock = env.ERC8001_DEPLOYMENT_BLOCK
-        ? Number(env.ERC8001_DEPLOYMENT_BLOCK)
-        : NaN;
-      const deploymentBlock = Number.isFinite(parsedDeploymentBlock)
-        ? parsedDeploymentBlock
-        : undefined;
-      const privateKey = env.AGENT_EVM_PRIVATE_KEY.trim();
+  if (!erc8001SdkPromiseByChain.has(chainId)) {
+    erc8001SdkPromiseByChain.set(
+      chainId,
+      (async () => {
+        if (!config.privateKey) {
+          throw new Error('Missing AGENT_EVM_PRIVATE_KEY for ERC8001 agent transactions.');
+        }
 
-      const provider = new JsonRpcProvider(rpcUrl);
-      const wallet = new Wallet(privateKey, provider);
-      const sdk = new AgentSDK(
-        {
-          escrowAddress,
+        // Use static network config to avoid repeated eth_chainId calls that can trip strict RPC rate limits.
+        const provider = new JsonRpcProvider(config.rpcUrl, chainId, { staticNetwork: true });
+        const wallet = new Wallet(config.privateKey, provider);
+        const sdk = new AgentSDK(
+          {
+            escrowAddress: config.escrowAddress,
+            chainId,
+            rpcUrl: config.rpcUrl,
+            ...(config.deploymentBlock !== undefined
+              ? { deploymentBlock: config.deploymentBlock }
+              : {}),
+            ipfs: { provider: 'mock', uriScheme: 'ipfs' },
+          },
+          wallet
+        );
+
+        return {
           chainId,
-          rpcUrl,
-          ...(deploymentBlock !== undefined ? { deploymentBlock } : {}),
-          ipfs: { provider: 'mock', uriScheme: 'ipfs' },
-        },
-        wallet
-      );
-
-      return {
-        sdk,
-        provider,
-        escrowAddress,
-        deploymentBlock,
-        address: await wallet.getAddress(),
-      };
-    })();
+          sdk,
+          provider,
+          escrowAddress: config.escrowAddress,
+          deploymentBlock: config.deploymentBlock,
+          publicBaseUrl: config.publicBaseUrl,
+          address: await wallet.getAddress(),
+        };
+      })()
+    );
   }
-  return erc8001SdkPromise;
+  return erc8001SdkPromiseByChain.get(chainId);
 }
 
-async function runScheduledSettlements(env) {
-  const { sdk, address, provider } = await getErc8001Sdk(env);
-  return runScheduledSettlementsWithSdk({
-    sdk,
-    address,
-    provider,
-    env,
-  });
+export async function runScheduledSettlements(env, deps = {}) {
+  const chainIds = deps.chainIds || resolveConfiguredErc8001ChainIds(env);
+  const getErc8001SdkFn = deps.getErc8001SdkFn || getErc8001Sdk;
+  const runScheduledSettlementsWithSdkFn =
+    deps.runScheduledSettlementsWithSdkFn || runScheduledSettlementsWithSdk;
+  const summaryByChain = {};
+  const aggregate = {
+    checked: 0,
+    eligible: 0,
+    settleEligible: 0,
+    escalateEligible: 0,
+    settled: 0,
+    escalated: 0,
+    failed: 0,
+    skipped: 0,
+    failedTasks: [],
+    byChain: summaryByChain,
+  };
+
+  for (const chainId of chainIds) {
+    try {
+      const { sdk, address, provider } = await getErc8001SdkFn(env, chainId);
+      const chainSummary = await runScheduledSettlementsWithSdkFn({
+        sdk,
+        address,
+        provider,
+        env,
+        chainId,
+      });
+      summaryByChain[String(chainId)] = chainSummary;
+
+      aggregate.checked += Number(chainSummary.checked || 0);
+      aggregate.eligible += Number(chainSummary.eligible || 0);
+      aggregate.settleEligible += Number(chainSummary.settleEligible || 0);
+      aggregate.escalateEligible += Number(chainSummary.escalateEligible || 0);
+      aggregate.settled += Number(chainSummary.settled || 0);
+      aggregate.escalated += Number(chainSummary.escalated || 0);
+      aggregate.failed += Number(chainSummary.failed || 0);
+      aggregate.skipped += Number(chainSummary.skipped || 0);
+      for (const failedTask of chainSummary.failedTasks || []) {
+        aggregate.failedTasks.push({
+          ...failedTask,
+          chainId,
+        });
+      }
+    } catch (error) {
+      const reason = error?.message || String(error);
+      summaryByChain[String(chainId)] = {
+        error: reason,
+      };
+      aggregate.failed += 1;
+      aggregate.failedTasks.push({
+        taskId: 'n/a',
+        action: 'initialization',
+        reason,
+        chainId,
+      });
+    }
+  }
+
+  return aggregate;
 }
 
 async function updateEscalationMetadata(env, localTask, patch) {
@@ -1299,17 +1664,18 @@ export async function runDisputeEscalationForTask({
   env,
   sdk,
   onchainTask,
+  chainId = null,
   uploadEvidenceFn = uploadFile,
   findLocalTaskFn = findLatestTaskByOnchainTaskIdAnyAgent,
   updateEscalationMetadataFn = updateEscalationMetadata,
 }) {
   const onchainTaskId = onchainTask.id.toString();
-  const localTask = await findLocalTaskFn(env, onchainTaskId);
+  const localTask = await findLocalTaskFn(env, onchainTaskId, chainId);
   if (!localTask) {
     return {
       status: 'retryable_error',
       code: 'local_task_not_found',
-      reason: `No matching local task run for onchainTaskId=${onchainTaskId}`,
+      reason: `No matching local task run for onchainTaskId=${onchainTaskId}${chainId ? ` chainId=${chainId}` : ''}`,
     };
   }
 
@@ -1331,8 +1697,13 @@ export async function runDisputeEscalationForTask({
   const writeErrorMeta = async (code, message) => {
     const erc8001Patch =
       typeof erc8001Meta.assertionPayloadHash === 'string'
-        ? { assertionPayloadHash: erc8001Meta.assertionPayloadHash }
-        : {};
+        ? {
+            assertionPayloadHash: erc8001Meta.assertionPayloadHash,
+            ...(chainId !== null ? { chainId } : {}),
+          }
+        : chainId !== null
+          ? { chainId }
+          : {};
     await updateEscalationMetadataFn(env, localTask, {
       erc8001: erc8001Patch,
       escalation: {
@@ -1404,6 +1775,7 @@ export async function runDisputeEscalationForTask({
     erc8001: {
       assertionPayloadHash: computedHash,
       assertionPayloadB64: assertionPayloadB64,
+      ...(chainId !== null ? { chainId } : {}),
       assertionCapturedAt:
         typeof erc8001Meta.assertionCapturedAt === 'string'
           ? erc8001Meta.assertionCapturedAt
@@ -1427,6 +1799,7 @@ export async function runScheduledSettlementsWithSdk({
   address,
   provider,
   env,
+  chainId = null,
   logger = console,
   runDisputeEscalationForTaskFn = runDisputeEscalationForTask,
 }) {
@@ -1448,7 +1821,7 @@ export async function runScheduledSettlementsWithSdk({
   };
 
   logger.log(
-    `Scheduled settlement scan signer=${address} blockTs=${blockTimestamp.toString()} tasks=${tasks.length}`
+    `Scheduled settlement scan chainId=${chainId ?? 'unknown'} signer=${address} blockTs=${blockTimestamp.toString()} tasks=${tasks.length}`
   );
 
   for (const task of tasks) {
@@ -1463,6 +1836,7 @@ export async function runScheduledSettlementsWithSdk({
         summary.failed += 1;
         summary.failedTasks.push({
           taskId: task.id.toString(),
+          ...(chainId !== null ? { chainId } : {}),
           action,
           reason: error?.message || String(error),
         });
@@ -1483,6 +1857,7 @@ export async function runScheduledSettlementsWithSdk({
           env,
           sdk,
           onchainTask: task,
+          chainId,
         });
         if (escalationResult?.status === 'escalated') {
           summary.escalated += 1;
@@ -1493,6 +1868,7 @@ export async function runScheduledSettlementsWithSdk({
           summary.failed += 1;
           summary.failedTasks.push({
             taskId: task.id.toString(),
+            ...(chainId !== null ? { chainId } : {}),
             action,
             reason: escalationResult?.reason || 'Escalation skipped due to retryable error.',
             code: escalationResult?.code || 'unknown',
@@ -1505,6 +1881,7 @@ export async function runScheduledSettlementsWithSdk({
         summary.failed += 1;
         summary.failedTasks.push({
           taskId: task.id.toString(),
+          ...(chainId !== null ? { chainId } : {}),
           action,
           reason: error?.message || String(error),
         });
@@ -1519,10 +1896,11 @@ export async function runScheduledSettlementsWithSdk({
 }
 
 async function acceptTaskIfNeeded(env, task, erc8001Request) {
-  const { sdk, address } = await getErc8001Sdk(env);
+  const { sdk, address } = await getErc8001Sdk(env, erc8001Request.chainId);
   const onchainTaskId = BigInt(erc8001Request.taskId);
   const stakeAmountWei = BigInt(erc8001Request.stakeAmountWei);
   const meta = {
+    chainId: erc8001Request.chainId,
     onchainTaskId: erc8001Request.taskId,
     stakeAmountWei: erc8001Request.stakeAmountWei,
     agentAddress: address,
@@ -1553,15 +1931,19 @@ async function acceptTaskIfNeeded(env, task, erc8001Request) {
   return meta;
 }
 
-async function isPaymentDeposited(env, onchainTaskId) {
-  const { sdk } = await getErc8001Sdk(env);
+async function isPaymentDeposited(
+  env,
+  onchainTaskId,
+  chainId = resolveDefaultErc8001ChainId(env)
+) {
+  const { sdk } = await getErc8001Sdk(env, chainId);
   return sdk.getPaymentDeposited(BigInt(onchainTaskId));
 }
 
 function buildResultUri(agentId, runId, erc8001Request, env) {
   const base = normalizeBaseUrl(
     erc8001Request.publicBaseUrl ||
-      env.ERC8001_PUBLIC_BASE_URL
+      resolveErc8001ChainConfig(env, erc8001Request.chainId).publicBaseUrl
   );
   return `${base}/${agentId}/tasks/${runId}`;
 }
@@ -1609,7 +1991,7 @@ async function assertErc8001Completion(
   executionResult,
   existingErc8001Meta
 ) {
-  const { sdk, address } = await getErc8001Sdk(env);
+  const { sdk, address } = await getErc8001Sdk(env, erc8001Request.chainId);
   const onchainTaskId = BigInt(erc8001Request.taskId);
   const onchainTask = await sdk.getTask(onchainTaskId);
   const status = Number(onchainTask.status);
@@ -1631,6 +2013,7 @@ async function assertErc8001Completion(
   if (status === 3 || status === 8) {
     return {
       assertedAt: 'already-asserted',
+      chainId: erc8001Request.chainId,
       resultURI: onchainTask.resultURI || resultURI,
       assertionPayloadB64: snapshot.assertionPayloadB64,
       assertionPayloadHash: snapshot.assertionPayloadHash,
@@ -1654,6 +2037,7 @@ async function assertErc8001Completion(
 
   return {
     assertedAt: nowIso(),
+    chainId: erc8001Request.chainId,
     resultURI,
     assertionPayloadB64: snapshot.assertionPayloadB64,
     assertionPayloadHash: snapshot.assertionPayloadHash,

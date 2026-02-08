@@ -5,15 +5,59 @@ import type { Task } from "./types";
 
 /** Plasma RPC and many others limit eth_getLogs to 10,000 blocks per query */
 const LOG_CHUNK_SIZE = 10_000;
+const MIN_LOG_CHUNK_SIZE = 1n;
 
 type EventFilter = Parameters<Contract["queryFilter"]>[0];
 
-/** Query filter in 10k-block chunks to respect RPC limits (e.g. Plasma 10k). Returns events from fromBlock to latest. */
+function stringifyError(error: unknown): string {
+  if (error instanceof Error) {
+    let msg = error.message;
+    // Unwrap ethers "could not coalesce error (error={ ... })" so we see the RPC message
+    const nested = msg.match(/error=\{\s*"message":\s*"([^"]+)"/);
+    if (nested?.[1]) msg += " " + nested[1];
+    const info = error as { info?: { error?: { message?: string } } };
+    if (info?.info?.error?.message) msg += " " + info.info.error.message;
+    return msg;
+  }
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isLogRangeLimitError(error: unknown): boolean {
+  const message = stringifyError(error).toLowerCase();
+  return (
+    message.includes("requested too many blocks") ||
+    message.includes("maximum is set to") ||
+    message.includes("max block range") ||
+    message.includes("query exceeds") ||
+    message.includes("block range")
+  );
+}
+
+function extractMaxRangeFromError(error: unknown): bigint | null {
+  const message = stringifyError(error);
+  const match = message.match(/maximum\s+is\s+set\s+to\s+(\d+)/i);
+  if (!match) return null;
+  try {
+    const parsed = BigInt(match[1]);
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Query filter in chunks to respect RPC limits. Returns events from fromBlock to latest. */
 async function queryFilterChunked(
   escrow: Contract,
   filter: EventFilter,
   fromBlock: bigint,
-  provider: Provider
+  provider: Provider,
+  /** When set (e.g. 30 for Flare), use this as initial chunk size to avoid a rejected first request */
+  maxChunkSize?: number
 ): Promise<Awaited<ReturnType<Contract["queryFilter"]>>> {
   const block = await provider.getBlockNumber();
   const toBlock = BigInt(block);
@@ -21,12 +65,36 @@ async function queryFilterChunked(
 
   const all: Awaited<ReturnType<Contract["queryFilter"]>> = [];
   let start = fromBlock;
+  let chunkSize = maxChunkSize != null ? BigInt(maxChunkSize) : BigInt(LOG_CHUNK_SIZE);
+  const hardCap = maxChunkSize != null ? BigInt(maxChunkSize) : null;
   while (start <= toBlock) {
-    const end = start + BigInt(LOG_CHUNK_SIZE) - 1n;
+    const effectiveSize = hardCap != null && chunkSize > hardCap ? hardCap : chunkSize;
+    const end = start + effectiveSize - 1n;
     const chunkEnd = end > toBlock ? toBlock : end;
-    const events = await escrow.queryFilter(filter, start, chunkEnd);
-    all.push(...events);
-    start = chunkEnd + 1n;
+    try {
+      const events = await escrow.queryFilter(filter, start, chunkEnd);
+      all.push(...events);
+      start = chunkEnd + 1n;
+    } catch (error) {
+      if (!isLogRangeLimitError(error)) {
+        throw error;
+      }
+
+      const maxRange = extractMaxRangeFromError(error);
+      let nextChunkSize = maxRange ?? chunkSize / 2n;
+      if (nextChunkSize >= chunkSize) {
+        nextChunkSize = chunkSize - 1n;
+      }
+      if (hardCap != null && nextChunkSize > hardCap) {
+        nextChunkSize = hardCap;
+      }
+
+      if (nextChunkSize < MIN_LOG_CHUNK_SIZE || chunkSize <= MIN_LOG_CHUNK_SIZE) {
+        throw error;
+      }
+
+      chunkSize = nextChunkSize;
+    }
   }
   return all;
 }
@@ -260,12 +328,19 @@ export interface EscalatedDispute {
   blockNumber: number;
 }
 
+/** Options for getEscalatedDisputes */
+export interface GetEscalatedDisputesOptions {
+  /** Max blocks per eth_getLogs chunk (e.g. 30 for Flare Coston2). If omitted, uses 10k then retries on error. */
+  maxBlockRange?: number;
+}
+
 /** Fetch escalated disputes from TaskDisputeEscalated events (fromBlock to toBlock). Event-based - 1-2 eth_getLogs instead of O(nextTaskId) getTask calls. */
 export async function getEscalatedDisputes(
   escrowAddress: string,
   provider: Provider,
   fromBlock: number | bigint,
-  toBlock?: number | bigint
+  toBlock?: number | bigint,
+  options?: GetEscalatedDisputesOptions
 ): Promise<EscalatedDispute[]> {
   const escrow = getEscrowContract(escrowAddress, provider);
   const filter = escrow.filters.TaskDisputeEscalated?.();
@@ -276,10 +351,13 @@ export async function getEscalatedDisputes(
       ? BigInt(toBlock)
       : BigInt(await provider.getBlockNumber());
   if (start > end) return [];
-  const events =
-    end - start <= BigInt(LOG_CHUNK_SIZE)
-      ? await escrow.queryFilter(filter, start, end)
-      : await queryFilterChunked(escrow, filter, start, provider);
+  const events = await queryFilterChunked(
+    escrow,
+    filter,
+    start,
+    provider,
+    options?.maxBlockRange
+  );
   return events
     .filter((e): e is typeof e & { blockNumber: number } => e.blockNumber != null && BigInt(e.blockNumber) <= end)
     .map((e) => {

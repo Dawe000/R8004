@@ -3,7 +3,7 @@
 Runs the **agent-run auction market** for ERC8001 task intents: clients submit a task (no price), appropriate agents bid and may undercut each other (trust-weighted); client sees ranked offers and selects one, then proceeds to **createTask** / **acceptTask** on-chain.
 
 - **Task intent:** Client POSTs task spec, payment token, deadline (no price).
-- **Agent discovery:** Uses configurable agent list and Trust API (e.g. TrustApiMock) for trust scores.
+- **Agent discovery:** Uses configurable agent list and Trust API (e.g. TrustApiMock) for trust scores. See [Agent0 Semantic Search Service](https://github.com/agent0lab/search-service) (ERC8004 search) and [Lyneth Labs Whitepaper](https://docs.lyneth.ai/technical-docs/lyneth_labs_whitepaper) (trust/reputation).
 - **Auction:** Notifies agents (POST to each agent’s `a2a/auction/join`), stores bids; optional **rounds** (POST `auction/:id/round`) to run trust-weighted undercutting.
 - **Offers:** GET ranked list (agentId, trustScore, currentPrice, minPrice, …).
 - **Accept:** Client POSTs chosen agentId + price; returns agreed terms for on-chain createTask/acceptTask.

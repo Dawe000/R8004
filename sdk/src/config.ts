@@ -2,26 +2,29 @@
  * SDK configuration
  */
 
-/** Default Plasma testnet (chainId 9746) deployment addresses */
+/** Plasma testnet USDT0 (ERC-20). https://testnet.plasmascan.to/token/0x502012b361AebCE43b26Ec812B74D9a51dB4D412 */
+export const PLASMA_TESTNET_USDT = "0x502012b361AebCE43b26Ec812B74D9a51dB4D412" as const;
+
+/** Default Plasma testnet (chainId 9746) deployment – USDT0-only escrow */
 export const PLASMA_TESTNET_DEFAULTS = {
-  escrowAddress: "0x2E24A0a838Fa71765A00CB9528B6C378D8437D53" as const,
-  mockTokenAddress: "0xd201516E43fe79D176c2A48420685CAB9f87cF6C" as const,
-  mockOOv3Address: "0x4316125D2F7A6163607b44f948D977fd0dbCA8F3" as const,
+  escrowAddress: "0xFf4e2165f2B30e3f7e25118148C3f7b53895F513" as const,
+  mockTokenAddress: PLASMA_TESTNET_USDT,
+  mockOOv3Address: "0x7Aa7562D8e62047fAfa185937C39436051565e73" as const,
   chainId: 9746,
   rpcUrl: "https://testnet-rpc.plasma.to",
   /** Escrow deployment block - used to limit eth_getLogs range on RPCs with 10k block limit (Plasma) */
-  deploymentBlock: 14650825,
+  deploymentBlock: 14701053,
 } as const;
 
-/** Default Coston2 testnet (chainId 114) deployment addresses for Firelight integration */
+/** Default Coston2 testnet (chainId 114) deployment – same timing as Plasma, FXRP + yFXRP whitelisted */
 export const COSTON2_FIRELIGHT_DEFAULTS = {
-  escrowAddress: "0xA4E4C1772d3d2f604734609608009C46C5E32537" as const,
+  escrowAddress: "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310" as const,
   fxrpTokenAddress: "0x0b6A3645c240605887a5532109323A3E12273dc7" as const,
   fFXRPVaultAddress: "0x91Bfe6A68aB035DFebb6A770FFfB748C03C0E40B" as const,
-  mockOOv3Address: "0x88E330931Eac139ef4C0a19797b682662a5B8C93" as const,
+  mockOOv3Address: "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27" as const,
   chainId: 114,
   rpcUrl: "https://coston2-api.flare.network/ext/C/rpc",
-  deploymentBlock: 26987203,
+  deploymentBlock: 27000863,
 } as const;
 
 export interface IpfsConfig {

@@ -44,27 +44,44 @@ OP=status npx hardhat run script/flare/vault-operations.ts --network coston2
 ```
 
 #### Deposit FXRP → Get yFXRP
+Uses tiny amounts by default (0.001 FXRP) so ~3 FXRP per wallet is enough.
 ```bash
-OP=deposit AMOUNT=10 npx hardhat run script/flare/vault-operations.ts --network coston2
+OP=deposit npx hardhat run script/flare/vault-operations.ts --network coston2
+# Or: OP=deposit AMOUNT=0.001 ...
 ```
 
 #### Redeem yFXRP → Get FXRP + Yield
 ```bash
-OP=redeem AMOUNT=5 npx hardhat run script/flare/vault-operations.ts --network coston2
+OP=redeem AMOUNT=0.0005 npx hardhat run script/flare/vault-operations.ts --network coston2
 ```
 
-#### Full E2E Flow (Deposit → Create Task → Accept → Settle)
+#### Full E2E Flow (Deposit → Create Task → Accept)
+Uses **0.001 FXRP** payment and **0.0001 yFXRP** stake (same scale as Plasma testnet).
 ```bash
 OP=flow npx hardhat run script/flare/vault-operations.ts --network coston2
 ```
 
-**Expected Output**:
+**Expected output (tiny amounts)**:
 ```
-✅ yFXRP balance: 8.0
-✅ Task created (FXRP payment, yFXRP stake)
-✅ Task accepted with yFXRP stake
-💎 yFXRP remaining: 7.5
-🔒 yFXRP staked in escrow: 0.5
+✅ yFXRP balance: 0.001
+✅ Task created (0.001 FXRP payment)
+✅ Task accepted with 0.0001 yFXRP stake
+```
+
+### 4. Run flows like Plasma (path-a, path-b, path-c, path-d)
+
+Same flow paths as Plasma testnet; uses **MNEMONIC** (Client = index 1, Agent = index 2). Tiny amounts (0.001 FXRP payment, 0.0001 yFXRP stake). Agent gets yFXRP automatically (deposits 0.001 FXRP to vault) if needed.
+
+```bash
+cd contracts
+npm run testnet:flow:coston2              # path-a (happy path)
+npm run testnet:flow:coston2:path-a
+npm run testnet:flow:coston2:path-b-concede
+npm run testnet:flow:coston2:path-b-uma-escalate   # needs PINATA_JWT; DVM resolves
+npm run testnet:flow:coston2:path-b-uma-agent
+npm run testnet:flow:coston2:path-b-uma-client
+npm run testnet:flow:coston2:path-c
+npm run testnet:flow:coston2:path-d
 ```
 
 ## Network Configuration

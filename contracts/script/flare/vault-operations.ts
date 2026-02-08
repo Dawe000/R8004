@@ -138,7 +138,7 @@ async function deposit(amount?: string) {
   const fxrpBalance = await fxrp.balanceOf(signerAddress);
   const depositAmount = amount
     ? ethers.parseUnits(amount, decimals)
-    : ethers.parseUnits("1", decimals);
+    : ethers.parseUnits("0.001", decimals);
 
   console.log("=== Deposit to Vault ===");
   console.log(`Depositing: ${ethers.formatUnits(depositAmount, decimals)} FXRP`);
@@ -236,9 +236,14 @@ async function fullFlow() {
   console.log("=== Full Agent Workflow ===");
   console.log("User:", signerAddress);
 
+  // Tiny amounts (6 decimals) – safe with ~3 FXRP per wallet
+  const depositAmount = ethers.parseUnits("0.001", decimals);
+  const paymentAmount = ethers.parseUnits("0.001", decimals);
+  const stakeAmount = ethers.parseUnits("0.0001", decimals);
+
   // Step 1: Deposit to vault
   console.log("\n📝 Step 1: Deposit FXRP → get yFXRP");
-  const depositAmount = ethers.parseUnits("1", decimals);
+  console.log(`   Amount: ${ethers.formatUnits(depositAmount, decimals)} FXRP`);
 
   const approveTx1 = await fxrp.approve(CONFIG.VAULT, depositAmount);
   await approveTx1.wait();
@@ -251,7 +256,7 @@ async function fullFlow() {
 
   // Step 2: Create task (as client)
   console.log("\n📝 Step 2: Create task (paying with FXRP, staking yFXRP)");
-  const paymentAmount = ethers.parseUnits("1", decimals);
+  console.log(`   Payment: ${ethers.formatUnits(paymentAmount, decimals)} FXRP`);
   const deadline = Math.floor(Date.now() / 1000) + 86400;
 
   const approveTx2 = await fxrp.approve(CONFIG.ESCROW, paymentAmount);
@@ -269,7 +274,7 @@ async function fullFlow() {
 
   // Step 3: Accept task (stake yFXRP, which keeps earning yield)
   console.log("\n📝 Step 3: Accept task (stake yFXRP)");
-  const stakeAmount = ethers.parseUnits("0.5", decimals);
+  console.log(`   Stake: ${ethers.formatUnits(stakeAmount, decimals)} yFXRP`);
 
   const yFXRP = new ethers.Contract(CONFIG.VAULT, ERC20_ABI, signer);
   const approveTx3 = await yFXRP.approve(CONFIG.ESCROW, stakeAmount);
@@ -315,7 +320,7 @@ async function main() {
       console.log("❌ Unknown operation:", operation);
       console.log("\nAvailable operations:");
       console.log("  OP=status   - Check vault status and balances");
-      console.log("  OP=deposit  - Deposit FXRP to vault (AMOUNT=1.0)");
+      console.log("  OP=deposit  - Deposit FXRP to vault (AMOUNT=0.001 default)");
       console.log("  OP=redeem   - Redeem yFXRP from vault (AMOUNT=half)");
       console.log("  OP=flow     - Full agent workflow");
       console.log("\nExample:");

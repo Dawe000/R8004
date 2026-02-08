@@ -96,6 +96,45 @@ export class VeniceService {
 		return Promise.all(texts.map((text) => this.generateEmbedding(text)));
 	}
 
+	async rerankAgents(prompt: string): Promise<string> {
+		const request: VeniceChatCompletionRequest = {
+			model: QUERY_REWRITE_MODEL,
+			messages: [
+				{
+					role: 'system',
+					content:
+						'You are an expert at matching tasks to agent capabilities. Analyze the agents and rerank them by relevance to the query. Output ONLY comma-separated numbers (e.g., "2,1,3").',
+				},
+				{
+					role: 'user',
+					content: prompt,
+				},
+			],
+			max_tokens: 50,
+			temperature: 0.1,
+			venice_parameters: {
+				disable_thinking: true,
+				include_venice_system_prompt: false,
+			},
+		};
+
+		const response = await fetch(`${VENICE_API_BASE}/chat/completions`, {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${this.apiKey}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(request),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Venice rerank error: ${response.status}`);
+		}
+
+		const data = (await response.json()) as VeniceChatCompletionResponse;
+		return this.extractChatContent(data) || '1,2,3';
+	}
+
 	private extractChatContent(data: VeniceChatCompletionResponse): string {
 		const choice = data.choices?.[0]?.message?.content;
 		if (typeof choice === 'string') {

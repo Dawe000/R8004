@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0032,
-      "price": 0.0061
+      "stake": 0.000032,
+      "price": 0.000061
     },
     {
       "id": "large_transfer_alerts",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0034,
-      "price": 0.0063
+      "stake": 0.000034,
+      "price": 0.000063
     }
   ]
 }

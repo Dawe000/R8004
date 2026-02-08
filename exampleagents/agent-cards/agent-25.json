@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0058,
-      "price": 0.0074
+      "stake": 0.000058,
+      "price": 0.000074
     },
     {
       "id": "local_market_brief",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.006,
-      "price": 0.0076
+      "stake": 0.00006,
+      "price": 0.000076
     }
   ]
 }

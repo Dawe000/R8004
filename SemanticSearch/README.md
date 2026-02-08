@@ -8,3 +8,5 @@ ERC8004-backed semantic search over registered agents and their capabilities.
 - Used by the market maker agent (`marketmakeragent/`) for routing
 
 **Implementation:** Query is implemented in **marketmakeragent** (Venice AI embeddings + Pinecone vector search). Indexing is done by **exampleagents/scripts/sync-agent-card-embeddings.mjs**; from repo root, `npm run sync:agent-vectors` populates the Pinecone index (requires `VENICE_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_HOST`).
+
+**Reference:** [Agent0 Semantic Search Service](https://github.com/agent0lab/search-service) — standalone ERC8004 semantic search (Cloudflare Workers, Venice AI, Pinecone).

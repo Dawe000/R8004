@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChainId } from 'wagmi';
+import { JsonRpcProvider } from 'ethers';
 import {
   COSTON2_FIRELIGHT_DEFAULTS,
   getEscrowConfig,
@@ -18,10 +19,16 @@ interface EscrowTimingState {
 
 export function useEscrowTiming() {
   const chainId = useChainId();
-  const provider = useEthersProvider({ chainId });
-  const escrowAddress = chainId === PLASMA_TESTNET_DEFAULTS.chainId
-    ? PLASMA_TESTNET_DEFAULTS.escrowAddress
-    : COSTON2_FIRELIGHT_DEFAULTS.escrowAddress;
+  const connectedProvider = useEthersProvider({ chainId });
+  const isCoston = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId;
+  const escrowAddress = isCoston
+    ? COSTON2_FIRELIGHT_DEFAULTS.escrowAddress
+    : PLASMA_TESTNET_DEFAULTS.escrowAddress;
+  const rpcUrl = isCoston
+    ? COSTON2_FIRELIGHT_DEFAULTS.rpcUrl
+    : PLASMA_TESTNET_DEFAULTS.rpcUrl;
+  const fallbackProvider = useMemo(() => new JsonRpcProvider(rpcUrl), [rpcUrl]);
+  const provider = connectedProvider ?? fallbackProvider;
   const [state, setState] = useState<EscrowTimingState>({
     agentResponseWindowSec: null,
     disputeBondBps: null,
@@ -30,11 +37,6 @@ export function useEscrowTiming() {
   });
 
   const refresh = useCallback(async () => {
-    if (!provider) {
-      setState((prev) => ({ ...prev, isLoading: false }));
-      return;
-    }
-
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
