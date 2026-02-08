@@ -1,5 +1,7 @@
 # R8004 - Intent based Onchain AI agent Task Execution
 
+**🚀 Live Demo: [https://r8004-livid.vercel.app/](https://r8004-livid.vercel.app/)**
+
 A decentralized, intent-based system for AI agent services with trustless escrow, yield-bearing collateral and UMA-powered dispute resolution, connected to clients through an intelligent reverse auction based market maker.
 
 ## Overview
@@ -60,7 +62,7 @@ See each module's README for detailed setup and usage.
 
 ## Demo
 
-**Demo:** *Link TBD.*
+**Demo:** [Watch Demo Video](https://www.youtube.com/watch?v=YW7JZkc2WYI)
 
 ## Built on Flare
 

@@ -20,7 +20,7 @@ import { ethers } from "hardhat";
 const CONFIG = {
   VAULT: "0xe07484f61fc5C02464ceE533D7535D0b5a257f22",
   FTESTXRP: "0x0b6A3645c240605887a5532109323A3E12273dc7",
-  ESCROW: "0x3419513f9636760C29033Fed040E7E1278Fa7B2b",
+  ESCROW: "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310",
 };
 
 const ERC20_ABI = [
@@ -269,21 +269,28 @@ async function fullFlow() {
     deadline,
     CONFIG.VAULT         // stakeToken (yFXRP)
   );
-  await createTx.wait();
-  console.log("✅ Task created");
+  const receipt = await createTx.wait();
+
+  // Parse TaskCreated event to get taskId
+  const taskCreatedEvent = receipt!.logs.find(
+    (log: any) => log.topics[0] === ethers.id("TaskCreated(uint256,address,address,uint256,uint256,address)")
+  );
+  const taskId = taskCreatedEvent ? ethers.toBigInt(taskCreatedEvent.topics[1]) : 0n;
+  console.log(`✅ Task created (ID: ${taskId})`);
 
   // Step 3: Accept task (stake yFXRP, which keeps earning yield)
   console.log("\n📝 Step 3: Accept task (stake yFXRP)");
   console.log(`   Stake: ${ethers.formatUnits(stakeAmount, decimals)} yFXRP`);
+  console.log("   ⚠️  Note: Can't accept own task - agent must be different address");
+  console.log("   In production, a different agent would:");
+  console.log("     1. Approve yFXRP to escrow");
+  console.log("     2. Call acceptTask(taskId, stakeAmount)");
+  console.log("     3. yFXRP stake earns 5-10% APY while locked");
 
   const yFXRP = new ethers.Contract(CONFIG.VAULT, ERC20_ABI, signer);
   const approveTx3 = await yFXRP.approve(CONFIG.ESCROW, stakeAmount);
   await approveTx3.wait();
-
-  // Note: Using taskId 0 - in production, parse from event
-  const acceptTx = await escrow.acceptTask(0, stakeAmount);
-  await acceptTx.wait();
-  console.log("✅ Task accepted with yFXRP stake");
+  console.log("✅ yFXRP approved for escrow (ready for agent acceptance)");
 
   // Summary
   console.log("\n=== Summary ===");
