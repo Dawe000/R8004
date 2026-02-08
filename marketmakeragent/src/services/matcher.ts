@@ -60,7 +60,7 @@ export class AgentMatcher {
 
 		rankedAgents.sort((a, b) => b.score - a.score);
 
-		return rankedAgents.slice(0, 5).map((scored) => {
+		const top5 = rankedAgents.slice(0, 5).map((scored) => {
 			return {
 				agent: scored.agent,
 				score: scored.score,
@@ -68,6 +68,19 @@ export class AgentMatcher {
 				reason: this.generateMatchReason(scored.semanticScore, scored.trustScore),
 			};
 		});
+
+		// LLM re-ranking for top 3 agents based on query-agent fit
+		if (top5.length >= 3) {
+			try {
+				const rerankedTop3 = await this.rerankTop3WithLLM(refinedQuery, top5.slice(0, 3));
+				return [...rerankedTop3, ...top5.slice(3)];
+			} catch (error) {
+				console.warn('LLM reranking failed, using original order:', error);
+				return top5;
+			}
+		}
+
+		return top5;
 	}
 
 	private async getTrustScore(
@@ -82,6 +95,51 @@ export class AgentMatcher {
 
 		// Default to 75/100 if no trust score available
 		return 0.75;
+	}
+
+	private async rerankTop3WithLLM(
+		query: string,
+		top3: RankedAgent[]
+	): Promise<RankedAgent[]> {
+		const prompt = `Task Query: "${query}"
+
+Candidate Agents:
+${top3
+	.map(
+		(ra, idx) => `
+${idx + 1}. ${ra.agent.name}
+   Description: ${ra.agent.description}
+   Skills: ${ra.agent.skills?.map((s) => s.name).join(', ') || 'N/A'}
+   Domains: ${ra.agent.supportedDomains?.join(', ') || 'N/A'}
+   Trust Score: ${(ra.trustScore * 100).toFixed(0)}/100
+   Match Score: ${(ra.score * 100).toFixed(0)}/100
+`
+	)
+	.join('\n')}
+
+Rerank these 3 agents by relevance to the task query. Consider:
+- Direct capability match for the specific task
+- Domain expertise alignment
+- Skill set applicability to the query
+
+Output ONLY the reranked order as comma-separated numbers (e.g., "2,1,3" if agent 2 is best match for the query).`;
+
+		const response = await this.veniceService.rerankAgents(prompt);
+
+		// Parse response like "2,1,3"
+		const order = response
+			.trim()
+			.split(',')
+			.map((n: string) => parseInt(n.trim()) - 1) // Convert to 0-indexed
+			.filter((idx: number) => idx >= 0 && idx < 3);
+
+		// Validate we got exactly 3 unique indices
+		if (order.length !== 3 || new Set(order).size !== 3) {
+			console.warn('Invalid LLM reranking response, using original order');
+			return top3;
+		}
+
+		return order.map((idx: number) => top3[idx]);
 	}
 
 	private generateMatchReason(semanticScore: number, trustScore: number): string {
