@@ -27,7 +27,8 @@
     "testnet:flow:coston2:path-c": "FLOW_PATH=path-c hardhat run script/flare/run-coston2-flow.ts --network coston2",
     "testnet:flow:coston2:path-d": "FLOW_PATH=path-d hardhat run script/flare/run-coston2-flow.ts --network coston2",
     "testnet:mint": "hardhat run script/plasma/mint-testnet-tokens.ts --network plasma-testnet",
-    "check:disputes": "hardhat run script/check-disputes.ts --network plasma-testnet"
+    "check:disputes": "hardhat run script/check-disputes.ts --network plasma-testnet",
+    "check:disputes:flare": "CHECK_DISPUTES_NETWORK=flare hardhat run script/check-disputes.ts --network coston2"
   },
   "devDependencies": {
     "@erc8001/agent-task-sdk": "file:../sdk",
