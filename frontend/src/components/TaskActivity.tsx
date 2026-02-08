@@ -7,6 +7,8 @@ import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
 import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
+import { getDisputeStatusMessage, isTaskTerminal } from '@/lib/disputeFlow';
+import { classifyRpcError } from '@/lib/rpcErrors';
 import { getTaskDispatchMeta } from '@/lib/taskMeta';
 import {
   Dialog,
@@ -19,6 +21,9 @@ import {
 import { Task, TaskStatus } from '@sdk/types';
 import { RefreshCw, CheckCircle2, Clock, AlertCircle, ExternalLink, Info } from 'lucide-react';
 import { toast } from 'sonner';
+
+const BASE_POLL_INTERVAL_MS = 7000;
+const MAX_POLL_INTERVAL_MS = 60000;
 
 const STATUS_MAP: Record<number, { label: string; color: string; icon: ComponentType<{ className?: string }> }> = {
   [TaskStatus.Created]: { label: 'Created', color: 'text-blue-400', icon: Clock },
@@ -56,7 +61,11 @@ function DataRow({ label, value }: { label: string; value: string }) {
 export function TaskActivity({ taskId }: { taskId: string }) {
   const sdk = useAgentSDK();
   const { address } = useAccount();
-  const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
+  const {
+    agentResponseWindowSec,
+    disputeBondBps,
+    isLoading: escrowTimingLoading,
+  } = useEscrowTiming();
 
   const [task, setTask] = useState<Task | null>(null);
   const [paymentDeposited, setPaymentDeposited] = useState<boolean | null>(null);
@@ -66,6 +75,10 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
   const [resultBody, setResultBody] = useState<unknown>(null);
   const [resultError, setResultError] = useState<string | null>(null);
+  const [readWarning, setReadWarning] = useState<string | null>(null);
+  const [pollBackoffMs, setPollBackoffMs] = useState<number>(BASE_POLL_INTERVAL_MS);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const isTerminal = task ? isTaskTerminal(task) : false;
 
   const { data: paymentTokenSymbolData } = useReadContract({
     address: task?.paymentToken as `0x${string}` | undefined,
@@ -85,32 +98,92 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   });
 
   const fetchTask = useCallback(async () => {
-    if (!sdk) return;
-    try {
-      const id = BigInt(taskId);
-      const [data, deposited] = await Promise.all([
-        sdk.client.getTask(id),
-        sdk.client.getPaymentDeposited(id),
-      ]);
-      setTask(data);
-      setPaymentDeposited(Boolean(deposited));
-    } catch (error) {
-      console.error('Failed to fetch task status:', error);
-    } finally {
-      setLoading(false);
-    }
+    if (!sdk) return null;
+    const id = BigInt(taskId);
+    const [data, deposited] = await Promise.all([
+      sdk.client.getTask(id),
+      sdk.client.getPaymentDeposited(id),
+    ]);
+    setTask(data);
+    setPaymentDeposited(Boolean(deposited));
+    setLastRefreshedAt(new Date().toISOString());
+    return data;
   }, [sdk, taskId]);
 
   useEffect(() => {
     if (!sdk) return;
 
-    void fetchTask();
-    const intervalId = setInterval(() => {
-      void fetchTask();
-    }, detailsOpen ? 5000 : 10000);
+    let cancelled = false;
+    setLoading(true);
+    void fetchTask()
+      .then(() => {
+        if (!cancelled) {
+          setReadWarning(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const classified = classifyRpcError(error);
+        setReadWarning(classified.message);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
 
-    return () => clearInterval(intervalId);
-  }, [sdk, fetchTask, detailsOpen]);
+    return () => {
+      cancelled = true;
+    };
+  }, [sdk, fetchTask]);
+
+  useEffect(() => {
+    if (!sdk || !detailsOpen || isTerminal) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let delayMs = BASE_POLL_INTERVAL_MS;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const latestTask = await fetchTask();
+        if (cancelled) return;
+        setReadWarning(null);
+        delayMs = BASE_POLL_INTERVAL_MS;
+        setPollBackoffMs(delayMs);
+        if (latestTask && isTaskTerminal(latestTask)) {
+          return;
+        }
+      } catch (error: unknown) {
+        if (cancelled) return;
+        const classified = classifyRpcError(error);
+        if (classified.kind === 'rate_limited') {
+          delayMs = Math.min(MAX_POLL_INTERVAL_MS, Math.max(BASE_POLL_INTERVAL_MS, delayMs * 2));
+          setReadWarning(classified.message);
+        } else {
+          delayMs = BASE_POLL_INTERVAL_MS;
+          setReadWarning(`Read refresh failed: ${classified.message}`);
+        }
+        setPollBackoffMs(delayMs);
+      }
+
+      if (!cancelled) {
+        timeoutId = setTimeout(() => {
+          void poll();
+        }, delayMs);
+      }
+    };
+
+    timeoutId = setTimeout(() => {
+      void poll();
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [sdk, detailsOpen, fetchTask, isTerminal]);
 
   useEffect(() => {
     if (!task?.resultURI) {
@@ -166,6 +239,11 @@ export function TaskActivity({ taskId }: { taskId: string }) {
 
   const status = Number(task.status);
   const statusInfo = STATUS_MAP[status] || { label: 'Pending', color: 'text-gray-400', icon: Clock };
+  const disputeStatusMessage = getDisputeStatusMessage(
+    task,
+    BigInt(Math.floor(Date.now() / 1000)),
+    agentResponseWindowSec ?? 0n
+  );
   const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
   const StatusIcon = statusInfo.icon;
   const normalizedAddress = address?.toLowerCase();
@@ -291,9 +369,6 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               <DataRow label="Agent Escalation Bond" value={`${formatEther(task.agentEscalationBond)} ${paymentTokenSymbol}`} />
               <DataRow label="Result Hash" value={task.resultHash} />
               <DataRow label="Result URI" value={task.resultURI || '-'} />
-              <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
-              <DataRow label="Agent Evidence URI" value={task.agentEvidenceURI || '-'} />
-              <DataRow label="UMA Assertion ID" value={task.umaAssertionId || '-'} />
             </div>
 
             <div className="space-y-2 rounded-xl border border-emerald-400/30 bg-emerald-950/20 p-3">
@@ -320,6 +395,25 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               )}
             </div>
 
+            <div className="space-y-2 rounded-xl border border-orange-400/20 bg-orange-950/10 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-orange-300">Dispute Lifecycle</p>
+              <p className="text-[10px] text-orange-200/80">{disputeStatusMessage}</p>
+              <DataRow label="Client Evidence URI" value={task.clientEvidenceURI || '-'} />
+              <DataRow label="Agent Evidence URI" value={task.agentEvidenceURI || '-'} />
+              <DataRow label="UMA Assertion ID" value={task.umaAssertionId || '-'} />
+              <DataRow label="UMA Result Truth" value={task.umaResultTruth ? 'true' : 'false'} />
+            </div>
+
+            <div className="space-y-1 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-[10px] text-slate-300">
+                Last refreshed: <span className="font-mono">{lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString() : '-'}</span>
+              </p>
+              <p className="text-[10px] text-slate-300">
+                Poll interval: <span className="font-mono">{detailsOpen && !isTaskTerminal(task) ? `${Math.round(pollBackoffMs / 1000)}s` : 'inactive'}</span>
+              </p>
+              {readWarning && <p className="text-[10px] text-yellow-300">{readWarning}</p>}
+            </div>
+
             {(resultBody !== null || resultError) && (
               <div className="space-y-2 rounded-xl border border-cyan-400/20 bg-cyan-950/10 p-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Result Payload</p>
@@ -338,7 +432,10 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               connectedAddress={address}
               agentResponseWindowSec={agentResponseWindowSec}
               disputeBondBps={disputeBondBps}
-              onTaskUpdated={fetchTask}
+              escrowTimingLoading={escrowTimingLoading}
+              onTaskUpdated={async () => {
+                await fetchTask();
+              }}
             />
           </DialogContent>
         </Dialog>

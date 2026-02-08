@@ -31,6 +31,7 @@ import {
   PLASMA_TESTNET_DEFAULTS,
 } from '@sdk/index';
 import { toast } from 'sonner';
+import { getDisputeStatusMessage } from '@/lib/disputeFlow';
 
 const TASK_STATUS_LABELS: Record<number, string> = {
   0: 'None',
@@ -71,7 +72,7 @@ export default function Home() {
 
   const { data: agents, isLoading, error } = useAgentMatching(query);
   const sdk = useAgentSDK();
-  const { agentResponseWindowSec, disputeBondBps } = useEscrowTiming();
+  const { agentResponseWindowSec, disputeBondBps, isLoading: escrowTimingLoading } = useEscrowTiming();
   const isPlasmaChain = chainId === PLASMA_TESTNET_DEFAULTS.chainId;
   const paymentTokenAddress = isPlasmaChain
     ? PLASMA_TESTNET_DEFAULTS.mockTokenAddress
@@ -315,6 +316,19 @@ export default function Home() {
   const showCreateButton =
     activeTaskId === null
     || (activeTaskStatus !== null && TERMINAL_STATUSES.has(activeTaskStatus));
+  const activeTaskDisputeMessage = activeTask
+    && (
+      Number(activeTask.status) === TaskStatus.ResultAsserted
+      || Number(activeTask.status) === TaskStatus.DisputedAwaitingAgent
+      || Number(activeTask.status) === TaskStatus.EscalatedToUMA
+      || Number(activeTask.status) === TaskStatus.Resolved
+    )
+    ? getDisputeStatusMessage(
+        activeTask,
+        BigInt(Math.floor(Date.now() / 1000)),
+        agentResponseWindowSec ?? 0n
+      )
+    : null;
 
   return (
     <main className="h-screen w-full bg-[#0a0a0f] text-foreground flex flex-col overflow-hidden relative">
@@ -419,7 +433,7 @@ export default function Home() {
             </div>
 
             {activeTaskId !== null && (
-              <div className="mt-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 text-xs space-y-2">
+              <div className="mt-4 max-h-72 overflow-y-auto custom-scrollbar p-4 rounded-2xl bg-white/[0.04] border border-white/10 text-xs space-y-2">
                 <div className="flex justify-between text-muted-foreground">
                   <span>On-chain Task ID</span>
                   <span className="font-mono text-white">{activeTaskId.toString()}</span>
@@ -476,8 +490,12 @@ export default function Home() {
                     connectedAddress={address}
                     agentResponseWindowSec={agentResponseWindowSec}
                     disputeBondBps={disputeBondBps}
+                    escrowTimingLoading={escrowTimingLoading}
                     onTaskUpdated={refreshActiveTask}
                   />
+                )}
+                {activeTaskDisputeMessage && (
+                  <p className="text-[10px] text-orange-200/80">{activeTaskDisputeMessage}</p>
                 )}
               </div>
             )}

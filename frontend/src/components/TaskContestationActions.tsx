@@ -7,12 +7,15 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
 import { getContestationTiming, getDisputeEligibility, getSettleEligibility } from '@/lib/contestation';
+import { getDisputePhase, getDisputeStatusMessage } from '@/lib/disputeFlow';
+import { classifyRpcError } from '@/lib/rpcErrors';
 
 interface TaskContestationActionsProps {
   task: Task;
   connectedAddress?: string;
   agentResponseWindowSec: bigint | null;
   disputeBondBps: bigint | null;
+  escrowTimingLoading?: boolean;
   onTaskUpdated?: () => Promise<void> | void;
 }
 
@@ -38,22 +41,16 @@ function formatTimestamp(unixSec: bigint): string {
 }
 
 function normalizeTxError(error: unknown): string {
-  const rawMessage = error instanceof Error ? error.message : 'Unknown error';
-  const message = rawMessage.toLowerCase();
+  return classifyRpcError(error).message;
+}
 
-  if (message.includes('user rejected') || message.includes('user denied')) {
-    return 'Transaction rejected in wallet.';
-  }
-
-  if (message.includes('insufficient funds')) {
-    return 'Insufficient funds to cover gas or required token amount.';
-  }
-
-  if (message.includes('execution reverted') || message.includes('call_exception')) {
-    return 'Transaction reverted on-chain. Verify task status, wallet, and dispute timing window.';
-  }
-
-  return rawMessage;
+function hasUmaAssertion(task: Task): boolean {
+  const value = String(task.umaAssertionId || '');
+  return Boolean(
+    value
+    && value !== '0x'
+    && value !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+  );
 }
 
 export function TaskContestationActions({
@@ -61,6 +58,7 @@ export function TaskContestationActions({
   connectedAddress,
   agentResponseWindowSec,
   disputeBondBps,
+  escrowTimingLoading = true,
   onTaskUpdated,
 }: TaskContestationActionsProps) {
   const sdk = useAgentSDK();
@@ -83,6 +81,12 @@ export function TaskContestationActions({
   const responseWindow = agentResponseWindowSec ?? 0n;
   const trimmedEvidenceUri = evidenceUri.trim();
   const status = Number(task.status);
+  const disputePhase = useMemo(() => {
+    return getDisputePhase(task, nowSec, responseWindow);
+  }, [task, nowSec, responseWindow]);
+  const disputeStatusMessage = useMemo(() => {
+    return getDisputeStatusMessage(task, nowSec, responseWindow);
+  }, [task, nowSec, responseWindow]);
 
   const timing = useMemo(() => {
     return getContestationTiming(task, nowSec, responseWindow);
@@ -93,15 +97,20 @@ export function TaskContestationActions({
   }, [task, nowSec, connectedAddress, trimmedEvidenceUri]);
 
   const settleEligibility = useMemo(() => {
-    return getSettleEligibility(task, nowSec, agentResponseWindowSec, connectedAddress);
-  }, [task, nowSec, agentResponseWindowSec, connectedAddress]);
+    return getSettleEligibility(task, nowSec, agentResponseWindowSec, connectedAddress, escrowTimingLoading);
+  }, [task, nowSec, agentResponseWindowSec, connectedAddress, escrowTimingLoading]);
 
   const expectedDisputeBond = useMemo(() => {
     if (disputeBondBps === null) return null;
     return (task.paymentAmount * disputeBondBps) / 10000n;
   }, [task.paymentAmount, disputeBondBps]);
 
-  if (status !== TaskStatus.ResultAsserted && status !== TaskStatus.DisputedAwaitingAgent) {
+  if (
+    status !== TaskStatus.ResultAsserted
+    && status !== TaskStatus.DisputedAwaitingAgent
+    && status !== TaskStatus.EscalatedToUMA
+    && status !== TaskStatus.Resolved
+  ) {
     return null;
   }
 
@@ -162,7 +171,7 @@ export function TaskContestationActions({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-orange-300">Contestation Controls</p>
-          <p className="text-[10px] text-orange-100/70">Testing and demo actions for disputed completion handling.</p>
+          <p className="text-[10px] text-orange-100/70">{disputeStatusMessage}</p>
         </div>
         <div className="text-right text-[10px] text-orange-200/80">
           {timing.secondsRemaining !== null && (
@@ -181,6 +190,9 @@ export function TaskContestationActions({
       )}
       <p className="text-[10px] text-orange-200/80">
         Cooldown ends: <span className="font-mono text-orange-100">{formatTimestamp(task.cooldownEndsAt)}</span>
+      </p>
+      <p className="text-[10px] text-orange-200/80">
+        Agent escalation and evidence upload are automated by agent cron. Frontend does not trigger escalation tx directly.
       </p>
 
       {status === TaskStatus.ResultAsserted && (
@@ -217,6 +229,26 @@ export function TaskContestationActions({
             <p className="text-[10px] text-orange-200/80">{settleEligibility.reason}</p>
           )}
         </div>
+      )}
+
+      {(status === TaskStatus.EscalatedToUMA || (status === TaskStatus.Resolved && hasUmaAssertion(task))) && (
+        <div className="space-y-2 rounded-lg border border-yellow-400/30 bg-yellow-900/10 p-2">
+          <p className="text-[10px] text-yellow-200">
+            Dispute phase: <span className="font-semibold">{disputePhase}</span>
+          </p>
+          <p className="text-[10px] text-yellow-200 break-all">
+            Agent Evidence URI: <span className="font-mono text-yellow-100">{task.agentEvidenceURI || '-'}</span>
+          </p>
+          <p className="text-[10px] text-yellow-200 break-all">
+            UMA Assertion ID: <span className="font-mono text-yellow-100">{task.umaAssertionId || '-'}</span>
+          </p>
+        </div>
+      )}
+
+      {status === TaskStatus.Resolved && hasUmaAssertion(task) && (
+        <p className="text-[10px] text-orange-200/80">
+          Resolution: <span className="font-mono text-orange-100">{task.umaResultTruth ? 'Agent won (assertion true)' : 'Client won (assertion false)'}</span>
+        </p>
       )}
     </div>
   );

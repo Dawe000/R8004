@@ -156,7 +156,8 @@ export function getSettleEligibility(
   task: Task,
   nowSec: bigint | number,
   agentResponseWindowSec: bigint | number | null,
-  connectedAddress?: string | null
+  connectedAddress?: string | null,
+  escrowTimingLoading = true
 ): ContestationEligibility {
   if (!sameAddress(task.client, connectedAddress)) {
     return {
@@ -168,7 +169,9 @@ export function getSettleEligibility(
   if (agentResponseWindowSec === null) {
     return {
       enabled: false,
-      reason: 'Loading escrow timing...',
+      reason: escrowTimingLoading
+        ? 'Loading escrow timing...'
+        : 'Escrow timing unavailable. Check RPC connectivity and refresh.',
     };
   }
 

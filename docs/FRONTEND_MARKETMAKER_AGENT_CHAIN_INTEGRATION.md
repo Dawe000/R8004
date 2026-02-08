@@ -192,6 +192,10 @@ Notes:
 - Evidence mode is URI-only in frontend (no file upload flow in this pass).
 - On-chain task state remains source of truth.
 - UI eligibility is advisory; transaction success/failure is final authority.
+- Activity task cards fetch once on mount and only poll while the details dialog is open.
+- Polling uses adaptive backoff on RPC rate limits (up to 60s) to reduce write-failure pressure.
+- Dispute error handling classifies RPC failures (rate-limited, reverted, insufficient funds, user rejected) and surfaces deterministic toasts.
+- Escalation remains cron-driven by the agent worker; frontend does not submit `escalateToUMA` directly.
 - Frontend eligibility is normalized through `frontend/src/lib/contestation.ts` helpers:
   - `getDisputeEligibility(...)`
   - `getSettleEligibility(...)`
