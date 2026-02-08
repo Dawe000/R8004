@@ -465,7 +465,7 @@ export default function Home() {
       </nav>
 
       <div className="flex-1 w-full flex items-center justify-center relative z-20 p-4">
-        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 h-[620px] sm:h-[680px] lg:h-[clamp(740px,82vh,920px)]">
+        <div className="w-full max-w-4xl mx-auto transition-all duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8 h-[600px]">
           <Card className="flex flex-col p-8 bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem] relative overflow-hidden h-full">
             <div className="flex justify-between items-center mb-6 flex-none">
               <div className="flex items-center gap-3">
