@@ -455,11 +455,17 @@ export default function Home() {
               Plasma Flow
             </button>
           </Link>
-          {isCoston2Chain && (
-            <Link href="/fassets">
-              <button className="px-4 py-1.5 rounded-full hover:bg-[#fbcfe8]/10 text-muted-foreground hover:text-[#fbcfe8] font-bold text-xs transition-all">FAssets Flow</button>
-            </Link>
-          )}
+          <Link href="/fassets">
+            <button
+              className={`px-4 py-1.5 rounded-full font-bold text-xs transition-all ${
+                isCoston2Chain
+                  ? 'bg-[#fbcfe8] text-[#be185d] shadow-lg shadow-pink-500/20'
+                  : 'hover:bg-[#fbcfe8]/10 text-muted-foreground hover:text-[#fbcfe8]'
+              }`}
+            >
+              FAssets Flow
+            </button>
+          </Link>
         </div>
         <ConnectButton />
       </nav>
