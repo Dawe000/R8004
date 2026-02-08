@@ -1,7 +1,7 @@
 {
   "chainId": 114,
   "network": "coston2-testnet",
-  "timestamp": "2026-02-07T21:12:09.435Z",
+  "timestamp": "2026-02-08T02:06:17.369Z",
   "contracts": {
     "FXRP": "0x0b6A3645c240605887a5532109323A3E12273dc7",
     "yFXRP": "0xe07484f61fc5C02464ceE533D7535D0b5a257f22",

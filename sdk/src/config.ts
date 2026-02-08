@@ -16,15 +16,15 @@ export const PLASMA_TESTNET_DEFAULTS = {
   deploymentBlock: 14701053,
 } as const;
 
-/** Default Coston2 testnet (chainId 114) deployment addresses for Firelight integration */
+/** Default Coston2 testnet (chainId 114) deployment – same timing as Plasma, FXRP + yFXRP whitelisted */
 export const COSTON2_FIRELIGHT_DEFAULTS = {
-  escrowAddress: "0xA4E4C1772d3d2f604734609608009C46C5E32537" as const,
+  escrowAddress: "0x5CA6175c0a5ec4ce61416E49fe69e3B91B4Ba310" as const,
   fxrpTokenAddress: "0x0b6A3645c240605887a5532109323A3E12273dc7" as const,
   fFXRPVaultAddress: "0x91Bfe6A68aB035DFebb6A770FFfB748C03C0E40B" as const,
-  mockOOv3Address: "0x88E330931Eac139ef4C0a19797b682662a5B8C93" as const,
+  mockOOv3Address: "0xdA085435a4a74e15e6CbF6dc3c9F89E9D6aD1C27" as const,
   chainId: 114,
   rpcUrl: "https://coston2-api.flare.network/ext/C/rpc",
-  deploymentBlock: 26987203,
+  deploymentBlock: 27000863,
 } as const;
 
 export interface IpfsConfig {

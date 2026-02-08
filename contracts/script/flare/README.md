@@ -72,8 +72,6 @@ OP=flow npx hardhat run script/flare/vault-operations.ts --network coston2
 
 Same flow paths as Plasma testnet; uses **MNEMONIC** (Client = index 1, Agent = index 2). Tiny amounts (0.001 FXRP payment, 0.0001 yFXRP stake). Agent gets yFXRP automatically (deposits 0.001 FXRP to vault) if needed.
 
-**Note:** The Coston2 escrow is deployed with **24h cooldown** (see `deploy-coston2-firelight.ts`). Path-a waits for the escrow’s cooldown from chain, so it takes ~24h unless you redeploy the escrow with a shorter cooldown (e.g. 180s) for testing.
-
 ```bash
 cd contracts
 npm run testnet:flow:coston2              # path-a (happy path)

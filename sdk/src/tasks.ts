@@ -66,8 +66,10 @@ async function queryFilterChunked(
   const all: Awaited<ReturnType<Contract["queryFilter"]>> = [];
   let start = fromBlock;
   let chunkSize = maxChunkSize != null ? BigInt(maxChunkSize) : BigInt(LOG_CHUNK_SIZE);
+  const hardCap = maxChunkSize != null ? BigInt(maxChunkSize) : null;
   while (start <= toBlock) {
-    const end = start + chunkSize - 1n;
+    const effectiveSize = hardCap != null && chunkSize > hardCap ? hardCap : chunkSize;
+    const end = start + effectiveSize - 1n;
     const chunkEnd = end > toBlock ? toBlock : end;
     try {
       const events = await escrow.queryFilter(filter, start, chunkEnd);
@@ -82,6 +84,9 @@ async function queryFilterChunked(
       let nextChunkSize = maxRange ?? chunkSize / 2n;
       if (nextChunkSize >= chunkSize) {
         nextChunkSize = chunkSize - 1n;
+      }
+      if (hardCap != null && nextChunkSize > hardCap) {
+        nextChunkSize = hardCap;
       }
 
       if (nextChunkSize < MIN_LOG_CHUNK_SIZE || chunkSize <= MIN_LOG_CHUNK_SIZE) {

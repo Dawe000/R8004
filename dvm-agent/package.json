@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy --minify",
+    "deploy": "npm run build --prefix ../sdk && wrangler deploy --minify",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "test:dispute": "npx tsx script/test-dispute-resolution.ts",
