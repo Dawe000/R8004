@@ -1,7 +1,13 @@
 'use client';
 import { useState } from 'react';
 
-export function TaskSearchBox({ onSearch }: { onSearch: (query: string) => void }) {
+interface TaskSearchBoxProps {
+  onSearch: (query: string) => void;
+  readOnly?: boolean;
+  expanded?: boolean;
+}
+
+export function TaskSearchBox({ onSearch, readOnly = false, expanded = false }: TaskSearchBoxProps) {
   const [query, setQuery] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -21,7 +27,10 @@ export function TaskSearchBox({ onSearch }: { onSearch: (query: string) => void 
         placeholder="Describe your task... (e.g. 'Find me an agent for market analysis')"
         value={query}
         onChange={handleChange}
-        className="w-full bg-transparent border-none text-xl p-0 h-24 placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none resize-none font-medium leading-relaxed"
+        readOnly={readOnly}
+        className={`w-full bg-transparent border-none text-xl p-0 ${expanded ? 'h-full min-h-[220px]' : 'h-24'} placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none resize-none font-medium leading-relaxed ${
+          readOnly ? 'cursor-not-allowed opacity-70' : ''
+        }`}
       />
     </div>
   );

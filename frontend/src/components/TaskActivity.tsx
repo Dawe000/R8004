@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { formatUnits } from 'ethers';
-import { useAccount, useChainId, useReadContract } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 import { useAgentSDK } from '@/hooks/useAgentSDK';
-import { useEscrowTiming } from '@/hooks/useEscrowTiming';
 import { TaskContestationActions } from '@/components/TaskContestationActions';
 import { notifyErc8001PaymentDepositedDirect } from '@/lib/api/agents';
 import { getDisputeStatusMessage, isTaskTerminal } from '@/lib/disputeFlow';
@@ -23,8 +22,8 @@ import { Task, TaskStatus } from '@sdk/types';
 import { RefreshCw, CheckCircle2, Clock, AlertCircle, ExternalLink, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
-const BASE_POLL_INTERVAL_MS = 7000;
-const MAX_POLL_INTERVAL_MS = 60000;
+const BASE_POLL_INTERVAL_MS = 60000;
+const MAX_POLL_INTERVAL_MS = 600000;
 
 const STATUS_MAP: Record<number, { label: string; color: string; icon: ComponentType<{ className?: string }> }> = {
   [TaskStatus.Created]: { label: 'Created', color: 'text-blue-400', icon: Clock },
@@ -86,19 +85,26 @@ function getAddressExplorerUrl(address: string, chainId: number): string | null 
   return null;
 }
 
-export function TaskActivity({ taskId }: { taskId: string }) {
+export function TaskActivity({
+  taskId,
+  initialTask = null,
+  agentResponseWindowSec,
+  disputeBondBps,
+  escrowTimingLoading,
+}: {
+  taskId: string;
+  initialTask?: Task | null;
+  agentResponseWindowSec: bigint | null;
+  disputeBondBps: bigint | null;
+  escrowTimingLoading: boolean;
+}) {
   const sdk = useAgentSDK();
   const { address } = useAccount();
   const chainId = useChainId();
-  const {
-    agentResponseWindowSec,
-    disputeBondBps,
-    isLoading: escrowTimingLoading,
-  } = useEscrowTiming();
 
-  const [task, setTask] = useState<Task | null>(null);
+  const [task, setTask] = useState<Task | null>(initialTask);
   const [paymentDeposited, setPaymentDeposited] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialTask);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isNotifyingPayment, setIsNotifyingPayment] = useState(false);
@@ -109,59 +115,34 @@ export function TaskActivity({ taskId }: { taskId: string }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const isTerminal = task ? isTaskTerminal(task) : false;
 
-  const { data: paymentTokenSymbolData } = useReadContract({
-    address: task?.paymentToken as `0x${string}` | undefined,
-    abi: [
-      {
-        name: 'symbol',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [],
-        outputs: [{ name: '', type: 'string' }],
-      },
-    ],
-    functionName: 'symbol',
-    query: {
-      enabled: Boolean(task?.paymentToken),
-    },
-  });
-
-  const { data: paymentTokenDecimalsData } = useReadContract({
-    address: task?.paymentToken as `0x${string}` | undefined,
-    abi: [
-      {
-        name: 'decimals',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [],
-        outputs: [{ name: '', type: 'uint8' }],
-      },
-    ],
-    functionName: 'decimals',
-    query: {
-      enabled: Boolean(task?.paymentToken),
-    },
-  });
-
-  const fetchTask = useCallback(async () => {
+  const fetchTask = useCallback(async ({ includePayment = false }: { includePayment?: boolean } = {}) => {
     if (!sdk) return null;
     const id = BigInt(taskId);
     const [data, deposited] = await Promise.all([
       sdk.client.getTask(id),
-      sdk.client.getPaymentDeposited(id),
+      includePayment ? sdk.client.getPaymentDeposited(id) : Promise.resolve(null),
     ]);
     setTask(data);
-    setPaymentDeposited(Boolean(deposited));
+    if (includePayment && deposited !== null) {
+      setPaymentDeposited(Boolean(deposited));
+    }
     setLastRefreshedAt(new Date().toISOString());
     return data;
   }, [sdk, taskId]);
 
   useEffect(() => {
-    if (!sdk) return;
+    if (initialTask) {
+      setTask(initialTask);
+      setLoading(false);
+    }
+  }, [initialTask]);
+
+  useEffect(() => {
+    if (!sdk || initialTask) return;
 
     let cancelled = false;
     setLoading(true);
-    void fetchTask()
+    void fetchTask({ includePayment: false })
       .then(() => {
         if (!cancelled) {
           setReadWarning(null);
@@ -181,7 +162,20 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sdk, fetchTask]);
+  }, [sdk, fetchTask, initialTask]);
+
+  useEffect(() => {
+    if (!sdk || !detailsOpen) return;
+
+    void fetchTask({ includePayment: true })
+      .then(() => {
+        setReadWarning(null);
+      })
+      .catch((error: unknown) => {
+        const classified = classifyRpcError(error);
+        setReadWarning(classified.message);
+      });
+  }, [sdk, detailsOpen, fetchTask]);
 
   useEffect(() => {
     if (!sdk || !detailsOpen || isTerminal) return;
@@ -193,7 +187,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     const poll = async () => {
       if (cancelled) return;
       try {
-        const latestTask = await fetchTask();
+        const latestTask = await fetchTask({ includePayment: true });
         if (cancelled) return;
         setReadWarning(null);
         delayMs = BASE_POLL_INTERVAL_MS;
@@ -290,13 +284,12 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     BigInt(Math.floor(Date.now() / 1000)),
     agentResponseWindowSec ?? 0n
   );
-  const paymentTokenSymbol = (paymentTokenSymbolData as string | undefined) || 'TOKEN';
-  const paymentTokenDecimals =
-    typeof paymentTokenDecimalsData === 'number'
-      ? paymentTokenDecimalsData
-      : chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId
-        ? 6
-        : 18;
+  const paymentTokenSymbol = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId
+    ? 'C2FLR'
+    : chainId === PLASMA_TESTNET_DEFAULTS.chainId
+      ? 'TST'
+      : 'TOKEN';
+  const paymentTokenDecimals = chainId === COSTON2_FIRELIGHT_DEFAULTS.chainId ? 6 : 18;
   const explorerUrl = getAddressExplorerUrl(task.client, chainId);
   const StatusIcon = statusInfo.icon;
   const normalizedAddress = address?.toLowerCase();
@@ -361,7 +354,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
     try {
       await sdk.client.depositPayment(task.id);
       toast.success('Payment deposited on-chain.', { id: toastId });
-      await fetchTask();
+      await fetchTask({ includePayment: true });
       await handleNotifyPaymentDeposited();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -488,7 +481,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
               disputeBondBps={disputeBondBps}
               escrowTimingLoading={escrowTimingLoading}
               onTaskUpdated={async () => {
-                await fetchTask();
+                await fetchTask({ includePayment: true });
               }}
             />
           </DialogContent>
