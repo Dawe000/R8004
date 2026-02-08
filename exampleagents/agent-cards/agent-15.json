@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0038,
-      "price": 0.0064
+      "stake": 0.000038,
+      "price": 0.000064
     },
     {
       "id": "risk_adjusted_yield_compare",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.004,
-      "price": 0.0066
+      "stake": 0.00004,
+      "price": 0.000066
     }
   ]
 }

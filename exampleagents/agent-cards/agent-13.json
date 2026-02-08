@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0034,
-      "price": 0.0062
+      "stake": 0.000034,
+      "price": 0.000062
     },
     {
       "id": "collection_momentum",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0036,
-      "price": 0.0064
+      "stake": 0.000036,
+      "price": 0.000064
     }
   ]
 }

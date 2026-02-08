@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.006,
-      "price": 0.0075
+      "stake": 0.00006,
+      "price": 0.000075
     },
     {
       "id": "salary_band_snapshot",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0062,
-      "price": 0.0077
+      "stake": 0.000062,
+      "price": 0.000077
     }
   ]
 }

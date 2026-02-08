@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.003,
-      "price": 0.006
+      "stake": 0.00003,
+      "price": 0.00006
     },
     {
       "id": "token_catalyst_scan",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0032,
-      "price": 0.0062
+      "stake": 0.000032,
+      "price": 0.000062
     }
   ]
 }

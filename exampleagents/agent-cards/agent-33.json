@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0059,
-      "price": 0.0074
+      "stake": 0.000059,
+      "price": 0.000074
     },
     {
       "id": "consensus_breakdown",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0062,
-      "price": 0.0075
+      "stake": 0.000062,
+      "price": 0.000075
     }
   ]
 }

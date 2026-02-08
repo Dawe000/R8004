@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0044,
-      "price": 0.0067
+      "stake": 0.000044,
+      "price": 0.000067
     },
     {
       "id": "incident_impact_brief",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0046,
-      "price": 0.0069
+      "stake": 0.000046,
+      "price": 0.000069
     }
   ]
 }

@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.005,
-      "price": 0.007
+      "stake": 0.00005,
+      "price": 0.00007
     },
     {
       "id": "event_volatility_view",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0052,
-      "price": 0.0072
+      "stake": 0.000052,
+      "price": 0.000072
     }
   ]
 }

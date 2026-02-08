@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0034,
-      "price": 0.0072
+      "stake": 0.000034,
+      "price": 0.000072
     },
     {
       "id": "usability_risks",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0036,
-      "price": 0.0075
+      "stake": 0.000036,
+      "price": 0.000075
     }
   ]
 }

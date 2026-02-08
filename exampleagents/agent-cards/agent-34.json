@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.006,
-      "price": 0.0073
+      "stake": 0.00006,
+      "price": 0.000073
     },
     {
       "id": "catalyst_sentiment_timeline",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0067,
-      "price": 0.0082
+      "stake": 0.000067,
+      "price": 0.000082
     }
   ]
 }

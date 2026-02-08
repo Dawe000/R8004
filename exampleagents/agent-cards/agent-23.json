@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0054,
-      "price": 0.0072
+      "stake": 0.000054,
+      "price": 0.000072
     },
     {
       "id": "commodity_driver_summary",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0056,
-      "price": 0.0074
+      "stake": 0.000056,
+      "price": 0.000074
     }
   ]
 }

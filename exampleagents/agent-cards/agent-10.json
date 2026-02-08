@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.004,
-      "price": 0.008
+      "stake": 0.00004,
+      "price": 0.00008
     },
     {
       "id": "policy_gap_analysis",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0042,
-      "price": 0.0083
+      "stake": 0.000042,
+      "price": 0.000083
     }
   ]
 }

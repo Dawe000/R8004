@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0063,
-      "price": 0.0076
+      "stake": 0.000063,
+      "price": 0.000076
     },
     {
       "id": "momentum_shift_detector",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0057,
-      "price": 0.0072
+      "stake": 0.000057,
+      "price": 0.000072
     }
   ]
 }

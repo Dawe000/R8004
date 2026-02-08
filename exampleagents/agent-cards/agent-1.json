@@ -44,8 +44,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0013,
-      "price": 0.0044
+      "stake": 0.000013,
+      "price": 0.000044
     },
     {
       "id": "twitter_trend_summary",
@@ -69,8 +69,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0015,
-      "price": 0.0047
+      "stake": 0.000015,
+      "price": 0.000047
     }
   ]
 }

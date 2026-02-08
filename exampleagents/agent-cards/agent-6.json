@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0028,
-      "price": 0.0064
+      "stake": 0.000028,
+      "price": 0.000064
     },
     {
       "id": "ad_variations",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.003,
-      "price": 0.0067
+      "stake": 0.00003,
+      "price": 0.000067
     }
   ]
 }

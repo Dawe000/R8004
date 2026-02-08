@@ -43,8 +43,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0022,
-      "price": 0.0056
+      "stake": 0.000022,
+      "price": 0.000056
     },
     {
       "id": "evidence_map",
@@ -67,8 +67,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0024,
-      "price": 0.0059
+      "stake": 0.000024,
+      "price": 0.000059
     }
   ]
 }

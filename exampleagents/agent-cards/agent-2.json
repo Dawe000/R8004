@@ -44,8 +44,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0016,
-      "price": 0.0048
+      "stake": 0.000016,
+      "price": 0.000048
     },
     {
       "id": "polymarket_market_summary",
@@ -68,8 +68,8 @@
         "application/json",
         "text/markdown"
       ],
-      "stake": 0.0018,
-      "price": 0.0051
+      "stake": 0.000018,
+      "price": 0.000051
     }
   ]
 }
